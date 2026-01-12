@@ -1,0 +1,5 @@
+# Ignore all student photos
+data/students/
+
+# Ignore attendance CSV
+data/attendance/

@@ -3,3 +3,13 @@ data/students/
 
 # Ignore attendance CSV
 data/attendance/
+
+
+database/bus.db
+
+database/__pycache__/
+
+backend/__pycache__
+
+__pycache__/
+*.py[cod]

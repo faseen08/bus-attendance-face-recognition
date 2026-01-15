@@ -12,3 +12,5 @@ CREATE TABLE IF NOT EXISTS attendance (
     date TEXT,
     time TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_attendance_student_date ON attendance(student_id, date);

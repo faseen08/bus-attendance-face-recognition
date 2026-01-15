@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bus Attendance Dashboard</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Icons -->
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+
+<body class="bg-gradient-to-br from-slate-900 to-slate-800 text-white min-h-screen">
+
+  <!-- Header -->
+  <header class="p-6 border-b border-slate-700">
+    <h1 class="text-3xl font-bold tracking-wide">
+      🚌 Bus Attendance System
+    </h1>
+    <p class="text-slate-400 mt-1">Real-time Face Recognition Dashboard</p>
+  </header>
+
+  <!-- Stats -->
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
+    <div class="bg-slate-800 rounded-xl p-6 shadow-lg">
+      <h3 class="text-slate-400">Total Students</h3>
+      <p id="totalStudents" class="text-4xl font-bold mt-2">–</p>
+    </div>
+    <div class="bg-green-600 rounded-xl p-6 shadow-lg">
+      <h3>Present Today</h3>
+      <p id="presentCount" class="text-4xl font-bold mt-2">–</p>
+    </div>
+    <div class="bg-red-600 rounded-xl p-6 shadow-lg">
+      <h3>Absent Today</h3>
+      <p id="absentCount" class="text-4xl font-bold mt-2">–</p>
+    </div>
+  </section>
+
+  <!-- Attendance Table -->
+  <section class="p-6">
+    <div class="bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+      <div class="p-4 border-b border-slate-700 flex justify-between">
+        <h2 class="text-xl font-semibold">Today’s Attendance</h2>
+        <input id="dateInput" type="date"
+               class="bg-slate-700 text-white rounded px-3 py-1"
+               onchange="loadAttendance()" />
+      </div>
+
+      <table class="w-full text-left">
+        <thead class="bg-slate-700 text-slate-300">
+          <tr>
+            <th class="p-3">Student ID</th>
+            <th class="p-3">Date</th>
+            <th class="p-3">Time</th>
+            <th class="p-3">Status</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceTable" class="divide-y divide-slate-700">
+          <!-- rows injected here -->
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+  <script>feather.replace()</script>
+</body>
+</html>
+

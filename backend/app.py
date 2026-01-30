@@ -9,10 +9,8 @@ from database.attendance_db import mark_attendance_db
 
 
 app = Flask(__name__)
+CORS(app)
 
-# configure CORS to allow only the frontend origin (dev default)
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://127.0.0.1:8000")
-CORS(app, origins=[FRONTEND_ORIGIN])
 
 # logging
 logging.basicConfig(level=logging.INFO)
@@ -91,9 +89,23 @@ def mark_attendance():
 @app.route("/attendance", methods=["GET"])
 def get_attendance():
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM attendance ORDER BY date DESC, time DESC").fetchall()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT student_id, date, time FROM attendance ORDER BY date DESC, time DESC"
+    )
+    rows = cursor.fetchall()
     conn.close()
-    return jsonify([dict(row) for row in rows])
+
+    result = []
+    for student_id, date, time in rows:
+        result.append({
+            "student_id": student_id,
+            "date": date,
+            "time": time
+        })
+
+    return jsonify(result)
 
 
 @app.route("/students", methods=["GET"])
@@ -106,14 +118,19 @@ def get_students():
 
 @app.route("/students/count", methods=["GET"])
 def get_students_count():
-    try:
-        conn = get_connection()
-        n = conn.execute("SELECT COUNT(*) AS c FROM students").fetchone()[0]
-        conn.close()
-        return jsonify({"count": n})
-    except Exception:
-        logger.exception("Failed to get students count")
-        return jsonify({"count": 0}), 500
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM students")
+    count = cursor.fetchone()[0]
+
+    conn.close()
+
+    return jsonify({"count": count})
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":

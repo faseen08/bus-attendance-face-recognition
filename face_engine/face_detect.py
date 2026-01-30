@@ -4,10 +4,14 @@ import numpy as np
 import face_recognition
 from face_engine.face_recognize import load_known_faces
 from modules.attendance_manager import mark_attendance
+import time
 
-STUDENTS_DIR = "data/students"
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STUDENTS_DIR = os.path.join(BASE_DIR, "data", "students")
 TOLERANCE = 0.6  # Adjust as needed (0.55-0.65)
 
+last_seen = {}
 
 def capture_face_image(save_path):
     cap = cv2.VideoCapture(0)
@@ -79,7 +83,11 @@ def real_time_face_recognition():
                 best_match_index = np.argmin(face_distances)
                 if face_distances[best_match_index] <= TOLERANCE:
                     name = known_ids[best_match_index]
-                    mark_attendance(name)
+
+                    now = time.time()
+                    if name not in last_seen or now - last_seen[name] > 10:
+                        mark_attendance(name)
+                        last_seen[name] = now
                 else:
                     name = "Unknown"
             else:

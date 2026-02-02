@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Student Portal - Leave Request</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen">
+  <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
+    <h1 class="text-2xl font-bold mb-2">Student Portal</h1>
+    <p class="text-slate-400 mb-6">Enter your ID to toggle leave status for today.</p>
+    
+    <input id="sid" type="text" placeholder="Enter Roll Number / ID" 
+           class="w-full p-3 rounded bg-slate-900 border border-slate-700 mb-4 focus:border-amber-500 outline-none">
+    
+    <button onclick="updateLeave()" class="w-full bg-amber-600 hover:bg-amber-500 p-3 rounded-lg font-bold transition">
+      Toggle My Leave Status
+    </button>
+    
+    <p id="resp" class="mt-4 text-center font-medium"></p>
+    <a href="index.html" class="block text-center mt-6 text-slate-500 hover:text-white text-sm">← Back to Dashboard</a>
+  </div>
+
+  <script>
+    async function updateLeave() {
+      const id = document.getElementById('sid').value;
+      const res = await fetch('http://127.0.0.1:5000/students/toggle_leave', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({student_id: id})
+      });
+      const data = await res.json();
+      const msg = document.getElementById('resp');
+      if(res.ok) {
+        msg.innerText = data.on_leave === 1 ? "✅ You are now marked ON LEAVE" : "🚌 You are now marked ACTIVE";
+        msg.className = data.on_leave === 1 ? "mt-4 text-center text-amber-400" : "mt-4 text-center text-green-400";
+      } else {
+        msg.innerText = "❌ Error: " + data.error;
+        msg.className = "mt-4 text-center text-red-400";
+      }
+    }
+  </script>
+</body>
+</html>

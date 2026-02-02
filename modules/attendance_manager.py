@@ -7,6 +7,5 @@ def mark_attendance(student_id):
     except Exception as e:
         print("[ATTENDANCE] Backend unavailable")
 
-    return result.get("status") == "Attendance marked"
     
 

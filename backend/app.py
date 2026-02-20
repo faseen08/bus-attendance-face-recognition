@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
 import os
 import logging
 
@@ -8,9 +9,22 @@ from database.db import get_connection
 from database.attendance_db import mark_attendance_db
 from werkzeug.utils import secure_filename
 from flask import send_from_directory
+from backend.auth import (
+    authenticate_user, 
+    generate_token, 
+    create_user,
+    require_auth
+)
 
 app = Flask(__name__)
 CORS(app)
+
+# ============================================================================
+# JWT CONFIGURATION
+# ============================================================================
+# This sets up JWT authentication for our app
+app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'
+jwt = JWTManager(app)
 
 @app.route('/data/<path:filename>')
 def serve_data(filename):
@@ -75,7 +89,140 @@ def seed_students_from_disk():
 def home():
     return "Bus Attendance Backend Running"
 
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.route("/login", methods=["POST"])
+def login():
+    """
+    Login endpoint - authenticates user with username and password.
+    
+    Request body:
+    {
+        "id": "username_or_student_id",
+        "password": "password",
+        "role": "admin" or "student"
+    }
+    
+    Returns:
+    {
+        "token": "JWT_TOKEN",
+        "user": {
+            "id": user_id,
+            "username": username,
+            "role": role,
+            "student_id": student_id (if student)
+        }
+    }
+    """
+    try:
+        data = request.json
+        username = data.get("id")  # Frontend sends "id" as username
+        password = data.get("password")
+        role = data.get("role", "student")
+        
+        # Validate input
+        if not username or not password:
+            return jsonify({"error": "Missing username or password"}), 400
+        
+        # Try to authenticate user
+        user = authenticate_user(username, password)
+        
+        if not user:
+            return jsonify({"error": "Invalid username or password"}), 401
+        
+        # Check if role matches
+        if user['role'] != role:
+            return jsonify({"error": f"This account is not a {role}"}), 403
+        
+        # Generate JWT token
+        token = generate_token(user['id'], user['username'], user['role'])
+        
+        return jsonify({
+            "token": token,
+            "user": user
+        }), 200
+    
+    except Exception as e:
+        logger.exception("Login error")
+        return jsonify({"error": "Login failed"}), 500
+
+
+@app.route("/register", methods=["POST"])
+def register():
+    """
+    Register endpoint - creates a new user account.
+    
+    Request body:
+    {
+        "username": "username",
+        "password": "password",
+        "role": "student" or "admin",
+        "student_id": "student_id" (required if role is student)
+    }
+    
+    Returns:
+    {
+        "message": "User registered successfully",
+        "token": "JWT_TOKEN"
+    }
+    """
+    try:
+        data = request.json
+        username = data.get("username")
+        password = data.get("password")
+        role = data.get("role", "student")
+        student_id = data.get("student_id")
+        
+        # Validate input
+        if not username or not password:
+            return jsonify({"error": "Username and password required"}), 400
+        
+        if role == "student" and not student_id:
+            return jsonify({"error": "Student ID required for student role"}), 400
+        
+        # Create user
+        result = create_user(username, password, role, student_id)
+        
+        if not result['success']:
+            return jsonify({"error": result['error']}), 400
+        
+        # Generate token for auto-login after registration
+        user = authenticate_user(username, password)
+        token = generate_token(user['id'], user['username'], user['role'])
+        
+        return jsonify({
+            "message": "User registered successfully",
+            "token": token,
+            "user": user
+        }), 201
+    
+    except Exception as e:
+        logger.exception("Registration error")
+        return jsonify({"error": "Registration failed"}), 500
+
+
+@app.route("/verify-token", methods=["GET"])
+@require_auth
+def verify_token():
+    """
+    Verify that a token is valid.
+    Protected endpoint - requires valid JWT token.
+    """
+    from flask_jwt_extended import get_jwt_identity, get_jwt
+    user_id = get_jwt_identity()
+    claims = get_jwt()
+    
+    return jsonify({
+        "valid": True,
+        "user_id": user_id,
+        "role": claims.get("role")
+    }), 200
+
+
 @app.route("/mark_attendance", methods=["POST"])
+@require_auth
 def mark_attendance():
     data = request.json
     student_id = data.get("student_id")
@@ -154,6 +301,7 @@ def health():
 UPLOAD_DIR = os.path.join("data", "students")
 
 @app.route("/students", methods=["POST"])
+@require_auth
 def add_student():
     student_id = request.form.get("student_id")
     name = request.form.get("name") # Added name
@@ -186,27 +334,41 @@ def add_student():
 
 @app.route("/students/toggle_leave", methods=["POST"])
 def toggle_leave():
-    data = request.json
-    student_id = data.get("student_id")
-    
-    if not student_id:
-        return jsonify({"error": "ID missing"}), 400
+    """
+    Toggle leave status for a student.
+    Note: This endpoint is accessible without authentication to allow quick leave requests
+    from leave.html, but in production you may want to add @require_auth
+    """
+    try:
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        student_id = data.get("student_id")
+        
+        if not student_id:
+            return jsonify({"error": "ID missing"}), 400
 
-    conn = get_connection()
-    # Check current status
-    student = conn.execute("SELECT on_leave FROM students WHERE student_id = ?", (student_id,)).fetchone()
-    
-    if not student:
+        conn = get_connection()
+        # Check current status
+        student = conn.execute("SELECT on_leave FROM students WHERE student_id = ?", (student_id,)).fetchone()
+        
+        if not student:
+            conn.close()
+            return jsonify({"error": "Student not found"}), 404
+
+        # Toggle: if 0 set to 1, if 1 set to 0
+        new_status = 1 if student[0] == 0 else 0
+        conn.execute("UPDATE students SET on_leave = ? WHERE student_id = ?", (new_status, student_id))
+        conn.commit()
         conn.close()
-        return jsonify({"error": "Student not found"}), 404
 
-    # Toggle: if 0 set to 1, if 1 set to 0
-    new_status = 1 if student[0] == 0 else 0
-    conn.execute("UPDATE students SET on_leave = ? WHERE student_id = ?", (new_status, student_id))
-    conn.commit()
-    conn.close()
-
-    return jsonify({"status": "Success", "on_leave": new_status})
+        return jsonify({"status": "Success", "on_leave": new_status}), 200
+    
+    except Exception as e:
+        logger.exception("Error in toggle_leave")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     # Ensure DB schema exists and seed students from disk (helpful for development)
@@ -218,5 +380,17 @@ if __name__ == "__main__":
 
 
     seed_students_from_disk()
+
+
+    # Debug helper: list all registered routes (development only)
+    @app.route('/debug/routes')
+    def debug_routes():
+        routes = []
+        for rule in app.url_map.iter_rules():
+            routes.append({
+                'rule': rule.rule,
+                'methods': sorted(list(rule.methods - set(['HEAD', 'OPTIONS'])))
+            })
+        return jsonify({'routes': routes})
 
     app.run(debug=True)

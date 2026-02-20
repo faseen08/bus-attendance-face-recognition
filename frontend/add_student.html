@@ -22,24 +22,42 @@
 
   <p id="msg" class="mt-4"></p>
 
-  <script>
-    const API = "http://127.0.0.1:5000";
+  <!-- Include API utility module -->
+  <script src="api.js"></script>
 
+  <script>
+    /**
+     * Add Student Form Handler
+     * 
+     * This handles adding a new student profile
+     * Uses FormData to send both text data and image file
+     * Includes authentication token automatically via apiCall()
+     */
     document.getElementById("studentForm").onsubmit = async (e) => {
       e.preventDefault();
       const form = new FormData(e.target);
-
-      const res = await fetch(`${API}/students`, {
-        method: "POST",
-        body: form
-      });
-
       const msg = document.getElementById("msg");
-      if (res.ok) {
-        msg.textContent = "Student added successfully";
-        e.target.reset();
-      } else {
-        msg.textContent = "Failed to add student";
+      
+      try {
+        // Make authenticated API call to add student
+        // Note: apiCall() handles the token automatically
+        const response = await apiCall('/students', {
+          method: "POST",
+          body: form // FormData is sent as-is
+        });
+
+        if (response && response.ok) {
+          msg.textContent = "✅ Student added successfully";
+          msg.className = "mt-4 text-green-400";
+          e.target.reset();
+        } else {
+          msg.textContent = "❌ Failed to add student";
+          msg.className = "mt-4 text-red-400";
+        }
+      } catch (error) {
+        console.error("Error adding student:", error);
+        msg.textContent = "❌ Error: Failed to connect to server";
+        msg.className = "mt-4 text-red-400";
       }
     };
   </script>

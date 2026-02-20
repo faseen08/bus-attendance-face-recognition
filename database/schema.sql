@@ -1,3 +1,13 @@
+-- Users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'student',  -- 'admin', 'student', 'driver'
+    student_id TEXT,  -- Links to students table if user is a student
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Updated students table
 CREATE TABLE IF NOT EXISTS students (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,3 +28,4 @@ CREATE TABLE IF NOT EXISTS attendance (
 );
 
 CREATE INDEX IF NOT EXISTS idx_attendance_student_date ON attendance(student_id, date);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);

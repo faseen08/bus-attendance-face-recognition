@@ -1,13 +1,28 @@
-const API_BASE = "http://127.0.0.1:5000";
+/**
+ * Students List - Main Script
+ * 
+ * This handles loading and displaying the list of students
+ * Features:
+ * - Loads all students from backend
+ * - Displays student photo, name, ID, and leave status
+ * - Uses authenticated API calls (includes JWT token automatically)
+ */
+
+// This will be set by api.js when included
+// const API_BASE and other utilities come from api.js
 
 async function loadStudents() {
   try {
-    // Changed ${API} to ${API_BASE}
-    const res = await fetch(`${API_BASE}/students`);
-    const students = await res.json();
+    // Use apiCallJSON() to load students with token included automatically
+    const students = await apiCallJSON('/students');
+
+    if (!students) {
+      throw new Error('Failed to load students data');
+    }
 
     const table = document.getElementById("studentsTable");
     if (!table) return; // Safety check
+
     table.innerHTML = "";
 
     students.forEach(s => {

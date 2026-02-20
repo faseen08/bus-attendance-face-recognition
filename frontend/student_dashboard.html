@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal - My Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-900 to-slate-800 text-white min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 p-6 shadow-lg">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold">🚌 My Attendance Portal</h1>
+                <p class="text-slate-400 mt-1">View your attendance and manage leave</p>
+            </div>
+            <div class="flex gap-3">
+                <a href="index.html" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg transition">
+                    <i data-feather="home" class="w-4 h-4"></i> Home
+                </a>
+                <button onclick="logout()" class="flex items-center gap-2 bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg transition">
+                    <i data-feather="log-out" class="w-4 h-4"></i> Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-6">
+        
+        <!-- Student Info Card -->
+        <section class="bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold" id="studentName">Loading...</h2>
+                    <p class="text-slate-400 mt-1">Student ID: <span id="studentId" class="font-mono">--</span></p>
+                </div>
+                <div class="text-right">
+                    <p class="text-slate-400 mb-2">Leave Status:</p>
+                    <span id="leaveStatus" class="px-4 py-2 rounded-full font-bold text-lg bg-green-900/30 text-green-400 border border-green-800/50">
+                        Active
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Leave Control Section -->
+        <section class="bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
+            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <i data-feather="alert-circle" class="w-5 h-5"></i> Leave Management
+            </h3>
+            <p class="text-slate-300 mb-4">Toggle your leave status. When marked as "On Leave", you won't be counted as absent.</p>
+            <button onclick="toggleLeave()" id="leaveBtn" class="bg-amber-600 hover:bg-amber-500 px-6 py-3 rounded-lg font-bold transition w-full md:w-auto">
+                Toggle Leave Status
+            </button>
+            <div id="leaveMsg" class="mt-4 hidden p-3 rounded-lg"></div>
+        </section>
+
+        <!-- Attendance Stats -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-700">
+                <h3 class="text-slate-400 text-sm font-semibold mb-2">Present Days</h3>
+                <p class="text-4xl font-bold text-green-400" id="presentCount">--</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-700">
+                <h3 class="text-slate-400 text-sm font-semibold mb-2">Absent Days</h3>
+                <p class="text-4xl font-bold text-red-400" id="absentCount">--</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-700">
+                <h3 class="text-slate-400 text-sm font-semibold mb-2">Attendance Rate</h3>
+                <p class="text-4xl font-bold text-blue-400" id="attendanceRate">--%</p>
+            </div>
+        </section>
+
+        <!-- Recent Attendance Records -->
+        <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700">
+            <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
+                <span>📋 My Recent Attendance Records</span>
+                <select id="dateFilter" onchange="filterAttendance()" class="bg-slate-600 px-3 py-1 rounded text-sm">
+                    <option value="">All Dates</option>
+                </select>
+            </div>
+            <table class="w-full text-left">
+                <thead class="bg-slate-700 border-b border-slate-600">
+                    <tr>
+                        <th class="p-3">Date</th>
+                        <th class="p-3">Time</th>
+                        <th class="p-3">Direction</th>
+                        <th class="p-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTable" class="divide-y divide-slate-700">
+                    <tr class="hover:bg-slate-700/50">
+                        <td colspan="4" class="p-4 text-center text-slate-400">Loading attendance records...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+    </main>
+
+    <!-- Scripts -->
+    <script src="api.js"></script>
+    <script>
+        /**
+         * Student Portal - Personal Attendance Dashboard
+         * 
+         * Features:
+         * - Shows logged-in student's attendance records
+         * - Displays leave status
+         * - Allows toggling leave status
+         * - Shows attendance statistics
+         */
+
+        let currentStudentId = null;
+        let allAttendanceRecords = [];
+
+        /**
+         * Initialize the portal when page loads
+         */
+        window.onload = async () => {
+            // Get student ID from URL params (passed from login redirect)
+            const params = new URLSearchParams(window.location.search);
+            currentStudentId = params.get('id');
+
+            if (!currentStudentId) {
+                alert('No student ID provided. Redirecting to login...');
+                window.location.href = 'index.html';
+                return;
+            }
+
+            // Load student data and attendance
+            await loadStudentData();
+            await loadStudentAttendance();
+            
+            feather.replace();
+        };
+
+        /**
+         * Load student info from the students database
+         */
+        async function loadStudentData() {
+            try {
+                // Fetch all students and find the current one
+                const students = await apiCallJSON('/students');
+                
+                if (!students) {
+                    throw new Error('Failed to load student data');
+                }
+
+                const student = students.find(s => s.student_id === currentStudentId);
+                
+                if (!student) {
+                    console.warn('Student not found in database');
+                    document.getElementById('studentName').innerText = currentStudentId;
+                    document.getElementById('studentId').innerText = currentStudentId;
+                    return;
+                }
+
+                // Display student info
+                document.getElementById('studentName').innerText = student.name || currentStudentId;
+                document.getElementById('studentId').innerText = student.student_id;
+
+                // Update leave status display
+                updateLeaveDisplay(student.on_leave);
+
+            } catch (error) {
+                console.error('Error loading student data:', error);
+            }
+        }
+
+        /**
+         * Load attendance records for current student
+         */
+        async function loadStudentAttendance() {
+            try {
+                // Fetch all attendance records
+                const records = await apiCallJSON('/attendance');
+                
+                if (!records) {
+                    throw new Error('Failed to load attendance');
+                }
+
+                // Filter for current student's records only
+                allAttendanceRecords = records.filter(r => r.student_id === currentStudentId);
+
+                // Sort by date descending (newest first)
+                allAttendanceRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                // Populate date filter dropdown
+                const uniqueDates = [...new Set(allAttendanceRecords.map(r => r.date))];
+                const dateFilter = document.getElementById('dateFilter');
+                
+                uniqueDates.forEach(date => {
+                    const option = document.createElement('option');
+                    option.value = date;
+                    option.textContent = date;
+                    dateFilter.appendChild(option);
+                });
+
+                // Display attendance records
+                displayAttendanceTable(allAttendanceRecords);
+
+                // Calculate and display statistics
+                calculateStats();
+
+            } catch (error) {
+                console.error('Error loading attendance:', error);
+                document.getElementById('attendanceTable').innerHTML = `
+                    <tr class="hover:bg-slate-700/50">
+                        <td colspan="4" class="p-4 text-center text-red-400">
+                            Failed to load attendance records
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        /**
+         * Display attendance records in the table
+         */
+        function displayAttendanceTable(records) {
+            const table = document.getElementById('attendanceTable');
+            
+            if (records.length === 0) {
+                table.innerHTML = `
+                    <tr class="hover:bg-slate-700/50">
+                        <td colspan="4" class="p-4 text-center text-slate-400">
+                            No attendance records found
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            table.innerHTML = records.map(record => `
+                <tr class="hover:bg-slate-700/50 border-b border-slate-700">
+                    <td class="p-3 font-semibold">${record.date}</td>
+                    <td class="p-3 text-slate-300">${record.time || '--'}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-1 rounded text-xs font-semibold ${
+                            record.direction === 'IN' 
+                                ? 'bg-green-900/30 text-green-400' 
+                                : 'bg-blue-900/30 text-blue-400'
+                        }">
+                            ${record.direction === 'IN' ? '🔵 Checkin' : '🔴 Checkout'}
+                        </span>
+                    </td>
+                    <td class="p-3 text-green-400 font-semibold">✓ Present</td>
+                </tr>
+            `).join('');
+        }
+
+        /**
+         * Filter attendance by selected date
+         */
+        function filterAttendance() {
+            const selectedDate = document.getElementById('dateFilter').value;
+            
+            if (!selectedDate) {
+                displayAttendanceTable(allAttendanceRecords);
+            } else {
+                const filtered = allAttendanceRecords.filter(r => r.date === selectedDate);
+                displayAttendanceTable(filtered);
+            }
+        }
+
+        /**
+         * Calculate attendance statistics
+         */
+        function calculateStats() {
+            if (allAttendanceRecords.length === 0) {
+                document.getElementById('presentCount').innerText = '0';
+                document.getElementById('absentCount').innerText = '0';
+                document.getElementById('attendanceRate').innerText = '0%';
+                return;
+            }
+
+            // Count unique days (a day is present if student checked in at least once)
+            const uniqueDays = new Set(allAttendanceRecords.map(r => r.date));
+            const presentDays = uniqueDays.size;
+
+            // Estimate total days (today onwards from first record)
+            const records = allAttendanceRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
+            const firstDate = new Date(records[0].date);
+            const lastDate = new Date(records[records.length - 1].date);
+            const totalDays = Math.floor((lastDate - firstDate) / (1000 * 60 * 60 * 24)) + 1;
+            
+            const absentDays = Math.max(0, totalDays - presentDays);
+            const rate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+
+            document.getElementById('presentCount').innerText = presentDays;
+            document.getElementById('absentCount').innerText = absentDays;
+            document.getElementById('attendanceRate').innerText = rate + '%';
+        }
+
+        /**
+         * Toggle leave status for the student
+         */
+        async function toggleLeave() {
+            const btn = document.getElementById('leaveBtn');
+            const msg = document.getElementById('leaveMsg');
+            
+            btn.disabled = true;
+            btn.innerText = 'Processing...';
+
+            try {
+                const response = await apiCall('/students/toggle_leave', {
+                    method: 'POST',
+                    body: { student_id: currentStudentId }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to toggle leave');
+                }
+
+                const data = await response.json();
+
+                // Update UI
+                updateLeaveDisplay(data.on_leave);
+
+                // Show success message
+                msg.classList.remove('hidden');
+                msg.innerText = data.on_leave === 1 
+                    ? '✅ You are now marked ON LEAVE' 
+                    : '✅ You are now marked ACTIVE';
+                msg.className = data.on_leave === 1 
+                    ? 'mt-4 p-3 rounded-lg bg-amber-600 text-white block text-center'
+                    : 'mt-4 p-3 rounded-lg bg-green-600 text-white block text-center';
+
+            } catch (error) {
+                console.error('Error toggling leave:', error);
+                msg.classList.remove('hidden');
+                msg.innerText = '❌ Failed to update leave status. Try again.';
+                msg.className = 'mt-4 p-3 rounded-lg bg-red-600 text-white block text-center';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Toggle Leave Status';
+            }
+        }
+
+        /**
+         * Update leave status display
+         */
+        function updateLeaveDisplay(onLeave) {
+            const statusSpan = document.getElementById('leaveStatus');
+            
+            if (onLeave === 1) {
+                statusSpan.innerText = 'On Leave';
+                statusSpan.className = 'px-4 py-2 rounded-full font-bold text-lg bg-amber-900/30 text-amber-400 border border-amber-800/50';
+            } else {
+                statusSpan.innerText = 'Active';
+                statusSpan.className = 'px-4 py-2 rounded-full font-bold text-lg bg-green-900/30 text-green-400 border border-green-800/50';
+            }
+        }
+    </script>
+
+</body>
+</html>

@@ -3,6 +3,7 @@
 <head>
   <title>Student Portal - Leave Request</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
 </head>
 <body class="bg-slate-900 text-white flex items-center justify-center min-h-screen">
   <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
@@ -20,22 +21,39 @@
     <a href="index.html" class="block text-center mt-6 text-slate-500 hover:text-white text-sm">← Back to Dashboard</a>
   </div>
 
+  <!-- Include API utility module -->
+  <script src="api.js"></script>
+  
   <script>
     async function updateLeave() {
       const id = document.getElementById('sid').value;
-      const res = await fetch('http://127.0.0.1:5000/students/toggle_leave', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({student_id: id})
-      });
-      const data = await res.json();
-      const msg = document.getElementById('resp');
-      if(res.ok) {
-        msg.innerText = data.on_leave === 1 ? "✅ You are now marked ON LEAVE" : "🚌 You are now marked ACTIVE";
-        msg.className = data.on_leave === 1 ? "mt-4 text-center text-amber-400" : "mt-4 text-center text-green-400";
-      } else {
-        msg.innerText = "❌ Error: " + data.error;
-        msg.className = "mt-4 text-center text-red-400";
+      
+      if (!id) {
+        document.getElementById('resp').innerText = "❌ Please enter your ID";
+        document.getElementById('resp').className = "mt-4 text-center text-red-400";
+        return;
+      }
+
+      try {
+        // Use apiCallJSON() to make authenticated request
+        const data = await apiCallJSON('/students/toggle_leave', {
+          method: 'POST',
+          body: { student_id: id }
+        });
+
+        const msg = document.getElementById('resp');
+        
+        if (data && !data.error) {
+          msg.innerText = data.on_leave === 1 ? "✅ You are now marked ON LEAVE" : "🚌 You are now marked ACTIVE";
+          msg.className = data.on_leave === 1 ? "mt-4 text-center text-amber-400" : "mt-4 text-center text-green-400";
+        } else {
+          msg.innerText = "❌ Error: " + (data?.error || "Unknown error");
+          msg.className = "mt-4 text-center text-red-400";
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        document.getElementById('resp').innerText = "❌ Failed to connect to the server";
+        document.getElementById('resp').className = "mt-4 text-center text-red-400";
       }
     }
   </script>

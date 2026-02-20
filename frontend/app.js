@@ -1,21 +1,33 @@
-const API_BASE = "http://127.0.0.1:5000";
+/**
+ * Attendance Dashboard - Main Script
+ * 
+ * This handles loading and displaying attendance data
+ * Features:
+ * - Loads attendance records from backend
+ * - Shows today's attendance by default
+ * - Can filter by date
+ * - Uses authenticated API calls (includes JWT token automatically)
+ */
+
+// This will be set by api.js when included
+// const API_BASE and other utilities come from api.js
 
 async function loadAttendance() {
   const dateInput = document.getElementById("dateInput");
   const selectedDate = dateInput.value || new Date().toISOString().slice(0, 10);
 
   try {
-    // fetch attendance and the small students count endpoint in parallel
-    const [attRes, countRes] = await Promise.all([
-      fetch(`${API_BASE}/attendance`),
-      fetch(`${API_BASE}/students/count`),
+    // Fetch attendance and the small students count endpoint in parallel
+    // Using apiCallJSON() automatically includes the token if user is logged in
+    const [data, countJson] = await Promise.all([
+      apiCallJSON('/attendance'),
+      apiCallJSON('/students/count'),
     ]);
 
-    if (!attRes.ok) throw new Error('Attendance API error ' + attRes.status);
-    if (!countRes.ok) throw new Error('Students count API error ' + countRes.status);
-
-    const data = await attRes.json();
-    const countJson = await countRes.json();
+    // Handle errors
+    if (!data || !countJson) {
+      throw new Error('Failed to load data');
+    }
 
     const table = document.getElementById("attendanceTable");
     table.innerHTML = "";

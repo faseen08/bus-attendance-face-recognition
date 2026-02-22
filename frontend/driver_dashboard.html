@@ -143,14 +143,17 @@
         window.addEventListener('DOMContentLoaded', () => {
             feather.replace();
             loadDashboard();
-            // Refresh every 5 seconds
-            setInterval(loadDashboard, 5000);
+            // Lower polling frequency to reduce API load and dashboard jitter.
+            setInterval(loadDashboard, 15000);
         });
 
         let currentStudentId = null;
+        let dashboardLoading = false;
 
         // ========== LOAD DASHBOARD DATA ==========
         async function loadDashboard() {
+            if (dashboardLoading) return;
+            dashboardLoading = true;
             try {
                 const response = await apiCallJSON('/driver/dashboard', { method: 'GET' });
                 
@@ -176,6 +179,8 @@
 
             } catch (err) {
                 console.error('Dashboard error:', err);
+            } finally {
+                dashboardLoading = false;
             }
         }
 

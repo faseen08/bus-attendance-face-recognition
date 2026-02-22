@@ -13,8 +13,19 @@ def cli():
 @cli.command()
 def initdb():
     """Initialize the database schema."""
-    init_db()
+    report = init_db()
     click.echo("DB initialized")
+    click.echo(f"Migrations applied: {len(report['migrations_applied'])}")
+    for m in report["migrations_applied"]:
+        click.echo(f"  - {m}")
+    if report["columns_added"]:
+        click.echo("Columns added:")
+        for c in report["columns_added"]:
+            click.echo(f"  - {c}")
+    if report["indexes_added"]:
+        click.echo("Indexes added:")
+        for i in report["indexes_added"]:
+            click.echo(f"  - {i}")
 
 
 @cli.command()

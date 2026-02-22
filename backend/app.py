@@ -38,6 +38,21 @@ CORS(app)
 app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'
 jwt = JWTManager(app)
 
+
+@jwt.invalid_token_loader
+def invalid_token_callback(error_string):
+    return jsonify({"error": "Invalid token", "detail": error_string}), 401
+
+
+@jwt.unauthorized_loader
+def missing_token_callback(error_string):
+    return jsonify({"error": "Authorization token required", "detail": error_string}), 401
+
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return jsonify({"error": "Token expired"}), 401
+
 @app.route('/data/<path:filename>')
 def serve_data(filename):
     # This points to your actual data folder

@@ -110,8 +110,11 @@ async function apiCall(endpoint, options = {}) {
       requestConfig.body = JSON.stringify(options.body);
     }
   } else {
-    // Set default Content-Type for non-FormData requests
-    headers['Content-Type'] = 'application/json';
+    // For GET/HEAD, avoid forcing content-type headers.
+    // This reduces unnecessary preflight requests in browsers.
+    if (method !== 'GET' && method !== 'HEAD') {
+      headers['Content-Type'] = 'application/json';
+    }
   }
   
   try {
@@ -172,12 +175,14 @@ async function apiCallJSON(endpoint, options = {}) {
     return null;
   }
   
-  try {
-    return await response.json();
-  } catch (error) {
-    console.error("Failed to parse response as JSON:", error);
-    return null;
+  const payload = await response.clone().json().catch(() => null);
+  if (!response.ok) {
+    if (payload && typeof payload === 'object') {
+      return payload;
+    }
+    return { error: `Request failed with status ${response.status}` };
   }
+  return payload;
 }
 
 /**

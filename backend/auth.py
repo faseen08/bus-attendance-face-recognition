@@ -159,7 +159,7 @@ def generate_token(user_id, username, role):
         str: JWT token
     """
     return create_access_token(
-        identity=user_id,
+        identity=str(user_id),
         additional_claims={
             "username": username,
             "role": role

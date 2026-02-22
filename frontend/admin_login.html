@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-900 to-slate-800 text-white flex items-center justify-center min-h-screen">
+    <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
+        
+        <div class="text-center mb-8">
+            <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 bg-blue-600">
+                <i data-feather="shield" class="w-10 h-10 text-white"></i>
+            </div>
+            <h1 class="text-3xl font-bold">Admin Login</h1>
+            <p class="text-slate-400 mt-2">Access to system administration</p>
+        </div>
+
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-slate-400 mb-2">Admin Username</label>
+                <input id="uid" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition" placeholder="Enter admin username" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-slate-400 mb-2">Password</label>
+                <input id="pwd" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition" placeholder="••••••••" required>
+            </div>
+
+            <button type="submit" id="btn" class="w-full py-3 rounded-lg font-bold text-white transition-all transform active:scale-95 shadow-lg bg-blue-600 hover:bg-blue-500 shadow-blue-900/20">
+                Sign In
+            </button>
+        </form>
+
+        <div id="error-msg" class="mt-4 text-center text-red-400 font-medium hidden"></div>
+
+        <div class="mt-6 text-center">
+            <a href="index.html" class="text-slate-500 hover:text-slate-300 text-sm flex items-center justify-center gap-2">
+                <i data-feather="arrow-left" class="w-4 h-4"></i> Back to Selection
+            </a>
+        </div>
+    </div>
+
+    <!-- Include the API utility helper before other scripts -->
+    <script src="api.js"></script>
+
+    <script>
+        const role = 'admin';
+        
+        // Elements
+        const btn = document.getElementById('btn');
+        const uid = document.getElementById('uid');
+        const pwd = document.getElementById('pwd');
+        const errorMsg = document.getElementById('error-msg');
+
+        // Handle Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMsg.classList.add('hidden'); // Hide error on new submit
+            btn.disabled = true;
+            btn.innerText = 'Signing in...';
+
+            const username = uid.value;
+            const password = pwd.value;
+            
+            try {
+                // Use our API utility to login
+                // This automatically stores the token if successful
+                const result = await login(username, password, role);
+                
+                if (result.error) {
+                    // Login failed
+                    errorMsg.innerText = `❌ ${result.error}`;
+                    errorMsg.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.innerText = 'Sign In';
+                } else {
+                    // Login successful - token is stored automatically
+                    // Redirect to admin dashboard
+                    window.location.href = 'admin_dashboard.html';
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                errorMsg.innerText = '❌ Failed to connect to the server.';
+                errorMsg.classList.remove('hidden');
+                btn.disabled = false;
+                btn.innerText = 'Sign In';
+            }
+        });
+
+        feather.replace();
+    </script>
+</body>
+</html>

@@ -15,6 +15,18 @@ from backend.auth import (
     create_user,
     require_auth
 )
+from modules.driver_manager import (
+    create_driver,
+    get_driver,
+    get_all_drivers,
+    log_student_boarding,
+    log_student_alighting,
+    is_student_on_bus,
+    get_students_on_bus,
+    get_recent_logs,
+    get_driver_stats,
+    get_daily_summary
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -222,7 +234,6 @@ def verify_token():
 
 
 @app.route("/mark_attendance", methods=["POST"])
-@require_auth
 def mark_attendance():
     data = request.json
     student_id = data.get("student_id")
@@ -305,10 +316,11 @@ UPLOAD_DIR = os.path.join("data", "students")
 def add_student():
     student_id = request.form.get("student_id")
     name = request.form.get("name") # Added name
+    bus_number = request.form.get("bus_number")  # Added bus_number
     bus_stop = request.form.get("bus_stop") # Added bus_stop
     photo = request.files.get("photo")
 
-    if not student_id or not photo:
+    if not student_id or not photo or not bus_number:
         return jsonify({"error": "missing data"}), 400
 
     folder = os.path.join(UPLOAD_DIR, student_id)
@@ -321,8 +333,8 @@ def add_student():
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO students (student_id, name, bus_stop, photo_path) VALUES (?, ?, ?, ?)",
-            (student_id, name if name else student_id, bus_stop, photo_path)
+            "INSERT INTO students (student_id, name, bus_number, bus_stop, photo_path) VALUES (?, ?, ?, ?, ?)",
+            (student_id, name if name else student_id, bus_number, bus_stop, photo_path)
         )
         conn.commit()
     except Exception as e:
@@ -369,6 +381,270 @@ def toggle_leave():
     except Exception as e:
         logger.exception("Error in toggle_leave")
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# DRIVER ENDPOINTS
+# ============================================================================
+
+@app.route('/driver/dashboard', methods=['GET'])
+@require_auth
+def driver_dashboard():
+    """
+    Get driver dashboard data (driver info, stats, students on bus)
+    Requires: JWT token with role='driver'
+    """
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        
+        user_id = int(get_jwt_identity())
+        conn = get_connection()
+        user = conn.execute(
+            "SELECT username, student_id FROM users WHERE id = ?", 
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        driver_id = user[1]  # student_id linked to driver
+        driver_info = get_driver(driver_id)
+        
+        if not driver_info:
+            return jsonify({"error": "Driver not found"}), 404
+        
+        stats = get_driver_stats(driver_id)
+        
+        return jsonify({
+            "driver": driver_info,
+            "statistics": stats
+        }), 200
+    
+    except Exception as e:
+        logger.exception("Error in driver_dashboard")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/driver/log-boarding', methods=['POST'])
+@require_auth
+def driver_log_boarding():
+    """
+    Log a student boarding the bus
+    Request body: { "student_id": "ekc23cs001" }
+    """
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        
+        data = request.get_json()
+        if not data or not data.get('student_id'):
+            return jsonify({"error": "Student ID required"}), 400
+        
+        student_id = data['student_id']
+        
+        # Get driver_id from user's linked student_id (driver_id)
+        user_id = int(get_jwt_identity())
+        conn = get_connection()
+        user = conn.execute(
+            "SELECT student_id FROM users WHERE id = ?", 
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        driver_id = user[0]
+        result = log_student_boarding(driver_id, student_id)
+        
+        if not result['success']:
+            return jsonify({"error": result['error']}), 400
+        
+        return jsonify({
+            "message": result['message'],
+            "student_id": student_id,
+            "action": "IN"
+        }), 200
+    
+    except Exception as e:
+        logger.exception("Error in driver_log_boarding")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/driver/log-alighting', methods=['POST'])
+@require_auth
+def driver_log_alighting():
+    """
+    Log a student alighting from the bus
+    Request body: { "student_id": "ekc23cs001" }
+    """
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        
+        data = request.get_json()
+        if not data or not data.get('student_id'):
+            return jsonify({"error": "Student ID required"}), 400
+        
+        student_id = data['student_id']
+        
+        # Get driver_id from user's linked student_id (driver_id)
+        user_id = int(get_jwt_identity())
+        conn = get_connection()
+        user = conn.execute(
+            "SELECT student_id FROM users WHERE id = ?", 
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        driver_id = user[0]
+        result = log_student_alighting(driver_id, student_id)
+        
+        if not result['success']:
+            return jsonify({"error": result['error']}), 400
+        
+        return jsonify({
+            "message": result['message'],
+            "student_id": student_id,
+            "action": "OUT"
+        }), 200
+    
+    except Exception as e:
+        logger.exception("Error in driver_log_alighting")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/driver/students-on-bus', methods=['GET'])
+@require_auth
+def driver_get_students_on_bus():
+    """
+    Get list of students currently on the bus
+    """
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        
+        user_id = get_jwt_identity()
+        conn = get_connection()
+        user = conn.execute(
+            "SELECT student_id FROM users WHERE id = ?", 
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        driver_id = user[0]
+        students = get_students_on_bus(driver_id)
+        
+        return jsonify({
+            "driver_id": driver_id,
+            "students_on_bus": students,
+            "count": len(students)
+        }), 200
+    
+    except Exception as e:
+        logger.exception("Error in driver_get_students_on_bus")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/driver/check-student/<student_id>', methods=['GET'])
+@require_auth
+def driver_check_student(student_id):
+    """
+    Check if a student is currently on the bus
+    Also verifies the student is assigned to the driver's bus
+    """
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        
+        # Get driver_id from JWT
+        user_id = int(get_jwt_identity())
+        conn = get_connection()
+        user = conn.execute(
+            "SELECT student_id FROM users WHERE id = ?", 
+            (user_id,)
+        ).fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({"error": "User not found"}), 404
+        
+        driver_id = user[0]
+        
+        # Get driver's bus number
+        driver = conn.execute(
+            "SELECT bus_number FROM drivers WHERE driver_id = ?",
+            (driver_id,)
+        ).fetchone()
+        
+        if not driver:
+            conn.close()
+            return jsonify({"error": "Driver not found"}), 404
+        
+        driver_bus_number = driver[0]
+        
+        # Get student info
+        student = conn.execute(
+            "SELECT name, bus_stop, bus_number FROM students WHERE student_id = ?",
+            (student_id,)
+        ).fetchone()
+        conn.close()
+        
+        if not student:
+            return jsonify({"error": "Student not found"}), 404
+        
+        # Check if student belongs to this driver's bus
+        if student[2] != driver_bus_number:
+            return jsonify({"error": f"Student {student_id} is not assigned to your bus ({driver_bus_number})"}), 403
+        
+        on_bus = is_student_on_bus(student_id)
+        
+        return jsonify({
+            "student_id": student_id,
+            "name": student[0],
+            "bus_stop": student[1],
+            "on_bus": on_bus
+        }), 200
+    
+    except Exception as e:
+        logger.exception("Error in driver_check_student")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/driver/daily-summary', methods=['GET'])
+@require_auth
+def driver_get_daily_summary():
+    """
+    Get summary of the day's activity
+    Optional query param: date (YYYY-MM-DD)
+    """
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        
+        user_id = int(get_jwt_identity())
+        conn = get_connection()
+        user = conn.execute(
+            "SELECT student_id FROM users WHERE id = ?", 
+            (user_id,)
+        ).fetchone()
+        conn.close()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        driver_id = user[0]
+        date = request.args.get('date')
+        summary = get_daily_summary(driver_id, date)
+        
+        return jsonify(summary), 200
+    
+    except Exception as e:
+        logger.exception("Error in driver_get_daily_summary")
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     # Ensure DB schema exists and seed students from disk (helpful for development)

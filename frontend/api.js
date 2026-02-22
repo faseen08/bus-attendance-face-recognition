@@ -126,8 +126,15 @@ async function apiCall(endpoint, options = {}) {
     
     // Handle other error status codes
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await response.clone().json().catch(() => ({}));
       console.error(`API Error (${response.status}):`, errorData);
+
+      // Common stale-token case after JWT identity format changes
+      if (response.status === 422 && (errorData.msg || '').toLowerCase().includes('subject must be a string')) {
+        clearToken();
+        window.location.href = 'index.html';
+      }
+
       return response; // Still return response so caller can handle it
     }
     

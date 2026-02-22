@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="api.js"></script>
+</head>
+<body class="bg-gradient-to-br from-slate-900 to-slate-800 text-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 p-6 shadow-lg">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold">🚌 Driver Dashboard</h1>
+                <p class="text-slate-400 mt-1" id="driverName">Loading...</p>
+            </div>
+            <div class="flex gap-3">
+                <a href="index.html" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg transition">
+                    <i data-feather="home" class="w-4 h-4"></i> Home
+                </a>
+                <button onclick="logout()" class="flex items-center gap-2 bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg transition">
+                    <i data-feather="log-out" class="w-4 h-4"></i> Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+        
+        <!-- Bus Info Card -->
+        <section class="bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-700">
+            <h2 class="text-2xl font-bold mb-4">Bus Information</h2>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                    <p class="text-slate-400 text-sm font-semibold">Driver ID</p>
+                    <p id="driverId" class="text-xl font-bold text-cyan-400 mt-1">--</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 text-sm font-semibold">Bus Number</p>
+                    <p id="busNumber" class="text-2xl font-bold text-purple-400 mt-1">--</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 text-sm font-semibold">Driver Name</p>
+                    <p id="driverFullName" class="text-2xl font-bold mt-1">--</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 text-sm font-semibold">License Number</p>
+                    <p id="licenseNumber" class="text-base font-mono text-slate-300 mt-1">--</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 text-sm font-semibold">Contact</p>
+                    <p id="phone" class="text-base text-slate-300 mt-1">--</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Statistics Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Boarded Today -->
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border-t-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm font-semibold">Boarded Today</p>
+                        <p id="boarded" class="text-3xl font-bold text-green-400 mt-2">0</p>
+                    </div>
+                    <i data-feather="arrow-down-circle" class="text-green-500 w-10 h-10 opacity-60"></i>
+                </div>
+            </div>
+
+            <!-- Alighted Today -->
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border-t-4 border-amber-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm font-semibold">Alighted Today</p>
+                        <p id="alighted" class="text-3xl font-bold text-amber-400 mt-2">0</p>
+                    </div>
+                    <i data-feather="arrow-up-circle" class="text-amber-500 w-10 h-10 opacity-60"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions & Student Search -->
+        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-4">
+            <h2 class="text-xl font-bold flex items-center gap-2">
+                <i data-feather="search" class="w-5 h-5"></i> Quick Student Lookup
+            </h2>
+            <p class="text-slate-400">Search for a student to log their boarding or alighting</p>
+            <div class="flex gap-4">
+                <input 
+                    type="text" 
+                    id="studentSearch" 
+                    placeholder="Enter Student ID (e.g., ekc23cs001)" 
+                    class="flex-1 px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition text-white"
+                    onkeypress="if(event.key === 'Enter') lookupStudent()">
+                <button 
+                    onclick="lookupStudent()" 
+                    class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg transition font-semibold"
+                >
+                    Search
+                </button>
+            </div>
+            <div id="studentStatus" class="hidden p-4 rounded-lg border-l-4">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <p id="statusStudentId" class="font-bold text-lg">--</p>
+                        <p id="statusStudentName" class="text-slate-300">--</p>
+                        <p id="statusStudentStop" class="text-sm text-slate-400">Bus Stop: --</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-sm text-slate-400 mb-1">Status</p>
+                        <p id="statusIndicator" class="text-lg font-bold">--</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button 
+                        id="btnBoarding" 
+                        onclick="logBoarding()" 
+                        class="flex-1 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition font-semibold"
+                    >
+                        ✅ Log Boarding
+                    </button>
+                    <button 
+                        id="btnAlighting" 
+                        onclick="logAlighting()" 
+                        class="flex-1 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg transition font-semibold"
+                    >
+                        ❌ Log Alighting
+                    </button>
+                </div>
+                <p id="actionMessage" class="mt-3 text-sm hidden text-center font-semibold"></p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 hidden px-6 py-3 rounded-lg shadow-lg text-white max-w-sm"></div>
+
+    <script>
+        // ========== INITIALIZATION ==========
+        window.addEventListener('DOMContentLoaded', () => {
+            feather.replace();
+            loadDashboard();
+            // Refresh every 5 seconds
+            setInterval(loadDashboard, 5000);
+        });
+
+        let currentStudentId = null;
+
+        // ========== LOAD DASHBOARD DATA ==========
+        async function loadDashboard() {
+            try {
+                const response = await apiCallJSON('/driver/dashboard', { method: 'GET' });
+                
+                if (!response || response.error) {
+                    console.error('Error loading dashboard:', response?.error);
+                    showToast('Error loading dashboard', 'error');
+                    return;
+                }
+
+                // Update driver info
+                const driver = response.driver;
+                document.getElementById('driverName').textContent = `${driver.name} | Bus ${driver.bus_number}`;
+                document.getElementById('driverId').textContent = driver.driver_id || '--';
+                document.getElementById('driverFullName').textContent = driver.name;
+                document.getElementById('busNumber').textContent = driver.bus_number;
+                document.getElementById('licenseNumber').textContent = driver.license_number || '--';
+                document.getElementById('phone').textContent = driver.phone || '--';
+
+                // Update statistics
+                const stats = response.statistics;
+                document.getElementById('boarded').textContent = stats.boarded;
+                document.getElementById('alighted').textContent = stats.alighted;
+
+            } catch (err) {
+                console.error('Dashboard error:', err);
+            }
+        }
+
+        // ========== STUDENT LOOKUP ==========
+        async function lookupStudent() {
+            const studentId = document.getElementById('studentSearch').value.trim();
+            if (!studentId) {
+                showToast('Please enter a Student ID', 'warning');
+                return;
+            }
+
+            try {
+                const response = await apiCallJSON(`/driver/check-student/${studentId}`, { method: 'GET' });
+                
+                if (!response || response.error) {
+                    showToast(response?.error || 'Student not found', 'error');
+                    document.getElementById('studentStatus').classList.add('hidden');
+                    return;
+                }
+
+                currentStudentId = studentId;
+                const isOnBus = response.on_bus;
+
+                // Show status box
+                document.getElementById('statusStudentId').textContent = response.student_id;
+                document.getElementById('statusStudentName').textContent = response.name;
+                document.getElementById('statusStudentStop').textContent = `Bus Stop: ${response.bus_stop}`;
+                
+                const statusDiv = document.getElementById('studentStatus');
+                if (isOnBus) {
+                    document.getElementById('statusIndicator').textContent = '✅ ON BUS';
+                    document.getElementById('statusIndicator').className = 'text-lg font-bold text-green-400';
+                    statusDiv.className = 'p-4 rounded-lg border-l-4 border-green-500 bg-green-900/20';
+                    document.getElementById('btnBoarding').disabled = true;
+                    document.getElementById('btnBoarding').className = 'flex-1 bg-slate-600 text-slate-300 px-4 py-2 rounded-lg cursor-not-allowed opacity-50';
+                    document.getElementById('btnAlighting').disabled = false;
+                    document.getElementById('btnAlighting').className = 'flex-1 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg transition font-semibold';
+                } else {
+                    document.getElementById('statusIndicator').textContent = '❌ NOT ON BUS';
+                    document.getElementById('statusIndicator').className = 'text-lg font-bold text-red-400';
+                    statusDiv.className = 'p-4 rounded-lg border-l-4 border-red-500 bg-red-900/20';
+                    document.getElementById('btnBoarding').disabled = false;
+                    document.getElementById('btnBoarding').className = 'flex-1 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition font-semibold';
+                    document.getElementById('btnAlighting').disabled = true;
+                    document.getElementById('btnAlighting').className = 'flex-1 bg-slate-600 text-slate-300 px-4 py-2 rounded-lg cursor-not-allowed opacity-50';
+                }
+                
+                document.getElementById('studentStatus').classList.remove('hidden');
+                document.getElementById('actionMessage').classList.add('hidden');
+
+            } catch (err) {
+                console.error('Lookup error:', err);
+                showToast('Error checking student status', 'error');
+            }
+        }
+
+        // ========== LOG BOARDING ==========
+        async function logBoarding() {
+            if (!currentStudentId) return;
+
+            try {
+                const response = await apiCallJSON('/driver/log-boarding', {
+                    method: 'POST',
+                    body: { student_id: currentStudentId }
+                });
+
+                if (!response || response.error) {
+                    showToast(response?.error || 'Error logging boarding', 'error');
+                    return;
+                }
+
+                showActionMessage('✅ ' + response.message, 'success');
+                setTimeout(() => {
+                    document.getElementById('studentSearch').value = '';
+                    document.getElementById('studentStatus').classList.add('hidden');
+                    loadDashboard();
+                }, 1500);
+
+            } catch (err) {
+                console.error('Boarding error:', err);
+                showToast('Error logging boarding', 'error');
+            }
+        }
+
+        // ========== LOG ALIGHTING ==========
+        async function logAlighting() {
+            if (!currentStudentId) return;
+
+            try {
+                const response = await apiCallJSON('/driver/log-alighting', {
+                    method: 'POST',
+                    body: { student_id: currentStudentId }
+                });
+
+                if (!response || response.error) {
+                    showToast(response?.error || 'Error logging alighting', 'error');
+                    return;
+                }
+
+                showActionMessage('✅ ' + response.message, 'success');
+                setTimeout(() => {
+                    document.getElementById('studentSearch').value = '';
+                    document.getElementById('studentStatus').classList.add('hidden');
+                    loadDashboard();
+                }, 1500);
+
+            } catch (err) {
+                console.error('Alighting error:', err);
+                showToast('Error logging alighting', 'error');
+            }
+        }
+
+        // ========== UI HELPERS ==========
+        function showActionMessage(message, type) {
+            const el = document.getElementById('actionMessage');
+            el.textContent = message;
+            el.className = `mt-3 text-sm text-center font-semibold ${
+                type === 'success' ? 'text-green-400' : 'text-red-400'
+            }`;
+            el.classList.remove('hidden');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white max-w-sm ${
+                type === 'error' ? 'bg-red-600' : 
+                type === 'warning' ? 'bg-yellow-600' : 
+                'bg-blue-600'
+            }`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+    </script>
+</body>
+</html>

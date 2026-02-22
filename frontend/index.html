@@ -7,22 +7,30 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 text-white flex items-center justify-center min-h-screen">
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full p-6">
-    
-    <a href="login.html?role=admin" class="bg-slate-800 p-8 rounded-2xl shadow-xl border-2 border-transparent hover:border-blue-500 transition-all group hover:shadow-2xl hover:shadow-blue-900/20">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full p-6">
+
+    <a href="admin_login.html" class="bg-slate-800 p-8 rounded-2xl shadow-xl border-2 border-transparent hover:border-blue-500 transition-all group hover:shadow-2xl hover:shadow-blue-900/20">
       <div class="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition">
         <i data-feather="shield" class="w-8 h-8"></i>
       </div>
       <h2 class="text-2xl font-bold mb-2">Admin Portal</h2>
-      <p class="text-slate-400">Manage students, track real-time attendance, and view system stats.</p>
+      <p class="text-slate-400">Manage students, track attendance, and configure alerts.</p>
     </a>
 
-    <a href="login.html?role=student" class="bg-slate-800 p-8 rounded-2xl shadow-xl border-2 border-transparent hover:border-amber-500 transition-all group hover:shadow-2xl hover:shadow-amber-900/20">
+    <a href="student_login.html" class="bg-slate-800 p-8 rounded-2xl shadow-xl border-2 border-transparent hover:border-amber-500 transition-all group hover:shadow-2xl hover:shadow-amber-900/20">
       <div class="bg-amber-600 w-16 h-16 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition">
         <i data-feather="user" class="w-8 h-8"></i>
       </div>
       <h2 class="text-2xl font-bold mb-2">Student Portal</h2>
-      <p class="text-slate-400">Mark leave, check your personal attendance history, and track your bus.</p>
+      <p class="text-slate-400">Check attendance, manage leave, and view bus updates.</p>
+    </a>
+
+    <a href="driver_login.html" class="bg-slate-800 p-8 rounded-2xl shadow-xl border-2 border-transparent hover:border-purple-500 transition-all group hover:shadow-2xl hover:shadow-purple-900/20">
+      <div class="bg-purple-600 w-16 h-16 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition">
+        <i data-feather="truck" class="w-8 h-8"></i>
+      </div>
+      <h2 class="text-2xl font-bold mb-2">Driver Portal</h2>
+      <p class="text-slate-400">Login with driver ID and manage your bus boarding workflow.</p>
     </a>
 
   </div>

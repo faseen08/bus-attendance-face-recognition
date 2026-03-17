@@ -2,3 +2,5 @@ flask==3.0.3
 flask-cors==4.0.0
 flask-jwt-extended==4.5.3
 werkzeug==3.0.1
+insightface>=0.7.3
+onnxruntime>=1.18.0

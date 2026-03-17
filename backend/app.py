@@ -1,42 +1,41 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from datetime import datetime
 import os
 import logging
 
-from database.db import init_db
-from database.db import get_connection
-from database.attendance_db import mark_attendance_db
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager, get_jwt_identity, get_jwt
 from werkzeug.utils import secure_filename
-from flask import send_from_directory
+
+from database.db import init_db, get_connection
+from database.attendance_db import mark_attendance_db
 from backend.auth import (
-    authenticate_user, 
-    generate_token, 
+    authenticate_user,
+    generate_token,
     create_user,
-    require_auth
+    require_auth,
+    require_role,
+    verify_password,
+    hash_password,
 )
 from modules.driver_manager import (
-    create_driver,
     get_driver,
-    get_all_drivers,
     log_student_boarding,
     log_student_alighting,
     is_student_on_bus,
     get_students_on_bus,
-    get_recent_logs,
     get_driver_stats,
-    get_daily_summary
+    get_daily_summary,
 )
+from modules.alerts import send_boarded_alert_for_student, evaluate_not_boarded_alerts
 
 app = Flask(__name__)
 CORS(app)
-
-# ============================================================================
-# JWT CONFIGURATION
-# ============================================================================
-# This sets up JWT authentication for our app
-app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'
+app.config["JWT_SECRET_KEY"] = "your-secret-key-change-in-production"
 jwt = JWTManager(app)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @jwt.invalid_token_loader
@@ -53,179 +52,95 @@ def missing_token_callback(error_string):
 def expired_token_callback(jwt_header, jwt_payload):
     return jsonify({"error": "Token expired"}), 401
 
-@app.route('/data/<path:filename>')
-def serve_data(filename):
-    # This points to your actual data folder
-    return send_from_directory(os.path.join(os.getcwd(), 'data'), filename)
 
-# logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+def _utc_iso():
+    return datetime.utcnow().isoformat(timespec="seconds")
 
 
-def seed_students_from_disk():
-    """Sync students table with data/students folder (Add new / Remove deleted)."""
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'students')
-    if not os.path.isdir(data_dir):
-        return
-
+def _driver_id_from_user(user_id):
     conn = get_connection()
-    cur = conn.cursor()
+    try:
+        row = conn.execute(
+            "SELECT student_id FROM users WHERE id = ?", (str(user_id),)
+        ).fetchone()
+        if not row or not row["student_id"]:
+            return None
+        return row["student_id"]
+    finally:
+        conn.close()
 
-    # --- PART 1: ADD NEW STUDENTS ---
-    existing_folders = sorted(os.listdir(data_dir))
-    for name in existing_folders:
-        path = os.path.join(data_dir, name)
-        if not os.path.isdir(path):
-            continue
-        
-        student_id = name
-        exists = cur.execute("SELECT id FROM students WHERE student_id = ?", (student_id,)).fetchone()
-        
-        if not exists:
-            photo = None
-            try:
-                for fname in os.listdir(path):
-                    if fname.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        photo = os.path.join('data', 'students', name, fname)
-                        break
-            except Exception:
-                photo = None
-
-            cur.execute(
-                "INSERT INTO students (student_id, name, photo_path) VALUES (?, ?, ?)",
-                (student_id, student_id, photo)
-            )
-
-    # --- PART 2: REMOVE DELETED STUDENTS ---
-    # Fetch all IDs currently in the DB
-    db_students = cur.execute("SELECT student_id FROM students").fetchall()
-    for row in db_students:
-        s_id = row[0]
-        # If the folder doesn't exist anymore, delete from DB
-        if s_id not in existing_folders:
-            logger.info(f"Removing {s_id} from database as folder was deleted.")
-            cur.execute("DELETE FROM students WHERE student_id = ?", (s_id,))
-            # Optional: Also delete their attendance history?
-            # cur.execute("DELETE FROM attendance WHERE student_id = ?", (s_id,))
-
-    conn.commit()
-    conn.close()
 
 @app.route("/")
 def home():
     return "Bus Attendance Backend Running"
 
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+
+@app.route("/frontend/<path:filename>")
+def serve_frontend(filename):
+    return send_from_directory(FRONTEND_DIR, filename)
+
+@app.route("/frontend")
+def serve_frontend_index():
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.route('/data/<path:filename>')
+def serve_data(filename):
+    return send_from_directory(os.path.join(os.getcwd(), 'data'), filename)
+
+
 # ============================================================================
-# AUTHENTICATION ENDPOINTS
+# AUTHENTICATION
 # ============================================================================
 
 @app.route("/login", methods=["POST"])
 def login():
-    """
-    Login endpoint - authenticates user with username and password.
-    
-    Request body:
-    {
-        "id": "username_or_student_id",
-        "password": "password",
-        "role": "admin" or "student"
-    }
-    
-    Returns:
-    {
-        "token": "JWT_TOKEN",
-        "user": {
-            "id": user_id,
-            "username": username,
-            "role": role,
-            "student_id": student_id (if student)
-        }
-    }
-    """
     try:
-        data = request.json
-        username = data.get("id")  # Frontend sends "id" as username
+        data = request.json or {}
+        username = data.get("id")
         password = data.get("password")
         role = data.get("role", "student")
-        
-        # Validate input
+
         if not username or not password:
             return jsonify({"error": "Missing username or password"}), 400
-        
-        # Try to authenticate user
+
         user = authenticate_user(username, password)
-        
         if not user:
             return jsonify({"error": "Invalid username or password"}), 401
-        
-        # Check if role matches
-        if user['role'] != role:
+
+        if user["role"] != role:
             return jsonify({"error": f"This account is not a {role}"}), 403
-        
-        # Generate JWT token
-        token = generate_token(user['id'], user['username'], user['role'])
-        
-        return jsonify({
-            "token": token,
-            "user": user
-        }), 200
-    
-    except Exception as e:
+
+        token = generate_token(user["id"], user["username"], user["role"])
+        return jsonify({"token": token, "user": user}), 200
+    except Exception:
         logger.exception("Login error")
         return jsonify({"error": "Login failed"}), 500
 
 
 @app.route("/register", methods=["POST"])
 def register():
-    """
-    Register endpoint - creates a new user account.
-    
-    Request body:
-    {
-        "username": "username",
-        "password": "password",
-        "role": "student" or "admin",
-        "student_id": "student_id" (required if role is student)
-    }
-    
-    Returns:
-    {
-        "message": "User registered successfully",
-        "token": "JWT_TOKEN"
-    }
-    """
     try:
-        data = request.json
+        data = request.json or {}
         username = data.get("username")
         password = data.get("password")
         role = data.get("role", "student")
         student_id = data.get("student_id")
-        
-        # Validate input
+
         if not username or not password:
             return jsonify({"error": "Username and password required"}), 400
-        
         if role == "student" and not student_id:
             return jsonify({"error": "Student ID required for student role"}), 400
-        
-        # Create user
+
         result = create_user(username, password, role, student_id)
-        
-        if not result['success']:
-            return jsonify({"error": result['error']}), 400
-        
-        # Generate token for auto-login after registration
+        if not result["success"]:
+            return jsonify({"error": result["error"]}), 400
+
         user = authenticate_user(username, password)
-        token = generate_token(user['id'], user['username'], user['role'])
-        
-        return jsonify({
-            "message": "User registered successfully",
-            "token": token,
-            "user": user
-        }), 201
-    
-    except Exception as e:
+        token = generate_token(user["id"], user["username"], user["role"])
+        return jsonify({"message": "User registered successfully", "token": token, "user": user}), 201
+    except Exception:
         logger.exception("Registration error")
         return jsonify({"error": "Registration failed"}), 500
 
@@ -233,106 +148,131 @@ def register():
 @app.route("/verify-token", methods=["GET"])
 @require_auth
 def verify_token():
-    """
-    Verify that a token is valid.
-    Protected endpoint - requires valid JWT token.
-    """
-    from flask_jwt_extended import get_jwt_identity, get_jwt
     user_id = get_jwt_identity()
     claims = get_jwt()
-    
-    return jsonify({
-        "valid": True,
-        "user_id": user_id,
-        "role": claims.get("role")
-    }), 200
+    return jsonify({"valid": True, "user_id": user_id, "role": claims.get("role")}), 200
 
+
+@app.route("/users/change-password", methods=["POST"])
+@require_auth
+def change_password():
+    data = request.json or {}
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+
+    if not current_password or not new_password:
+        return jsonify({"error": "current_password and new_password are required"}), 400
+    if len(str(new_password)) < 6:
+        return jsonify({"error": "New password must be at least 6 characters"}), 400
+
+    user_id = str(get_jwt_identity())
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT id, password_hash FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        if not verify_password(current_password, user["password_hash"]):
+            return jsonify({"error": "Current password is incorrect"}), 400
+
+        new_hash = hash_password(new_password)
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (new_hash, user_id),
+        )
+        conn.commit()
+        return jsonify({"status": "Password updated successfully"}), 200
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# CORE STUDENT/ATTENDANCE ROUTES
+# ============================================================================
 
 @app.route("/mark_attendance", methods=["POST"])
 def mark_attendance():
-    data = request.json
+    data = request.json or {}
     student_id = data.get("student_id")
-
     if not student_id:
         return jsonify({"error": "student_id missing"}), 400
 
-    # verify student exists
+    conn = get_connection()
     try:
-        conn = get_connection()
         exists = conn.execute(
             "SELECT id FROM students WHERE student_id = ?", (student_id,)
         ).fetchone()
+    finally:
         conn.close()
-    except Exception as e:
-        logger.exception("DB error checking student")
-        return jsonify({"error": "database error"}), 500
 
     if not exists:
         return jsonify({"error": "unknown student_id"}), 404
 
     marked = mark_attendance_db(student_id)
-
     if marked:
-        return jsonify({"status": "Attendance marked"})
-    else:
-        return jsonify({"status": "Already marked today"})
+        return jsonify({"status": "Attendance marked"}), 200
+    return jsonify({"status": "Already marked today"}), 200
+
 
 @app.route("/attendance", methods=["GET"])
 def get_attendance():
     conn = get_connection()
-    cursor = conn.cursor()
+    try:
+        rows = conn.execute(
+            "SELECT student_id, date, time, direction FROM attendance ORDER BY date DESC, time DESC"
+        ).fetchall()
+    finally:
+        conn.close()
 
-    cursor.execute(
-        "SELECT student_id, date, time FROM attendance ORDER BY date DESC, time DESC"
-    )
-    rows = cursor.fetchall()
-    conn.close()
-
-    result = []
-    for student_id, date, time in rows:
-        result.append({
-            "student_id": student_id,
-            "date": date,
-            "time": time
-        })
-
-    return jsonify(result)
+    return jsonify([
+        {
+            "student_id": row["student_id"],
+            "date": row["date"],
+            "time": row["time"],
+            "direction": row["direction"] if row["direction"] else "IN",
+        }
+        for row in rows
+    ])
 
 
 @app.route("/students", methods=["GET"])
 def get_students():
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM students ORDER BY student_id").fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in rows])
+    try:
+        rows = conn.execute("SELECT * FROM students ORDER BY student_id").fetchall()
+        return jsonify([dict(row) for row in rows])
+    finally:
+        conn.close()
 
 
 @app.route("/students/count", methods=["GET"])
 def get_students_count():
     conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) FROM students")
-    count = cursor.fetchone()[0]
-
-    conn.close()
-
-    return jsonify({"count": count})
-
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok"})
+    try:
+        count = conn.execute("SELECT COUNT(*) AS c FROM students").fetchone()["c"]
+        return jsonify({"count": count})
+    finally:
+        conn.close()
 
 
 UPLOAD_DIR = os.path.join("data", "students")
 
+
 @app.route("/students", methods=["POST"])
 @require_auth
+@require_role("admin")
 def add_student():
     student_id = request.form.get("student_id")
-    name = request.form.get("name") # Added name
-    bus_number = request.form.get("bus_number")  # Added bus_number
-    bus_stop = request.form.get("bus_stop") # Added bus_stop
+    name = request.form.get("name")
+    bus_number = request.form.get("bus_number")
+    bus_stop = request.form.get("bus_stop")
+    parent_name = request.form.get("parent_name")
+    parent_phone = request.form.get("parent_phone")
+    alerts_enabled = request.form.get("alerts_enabled", "1")
+    initial_password = (request.form.get("initial_password") or "").strip()
     photo = request.files.get("photo")
 
     if not student_id or not photo or not bus_number:
@@ -348,340 +288,866 @@ def add_student():
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO students (student_id, name, bus_number, bus_stop, photo_path) VALUES (?, ?, ?, ?, ?)",
-            (student_id, name if name else student_id, bus_number, bus_stop, photo_path)
+            """
+            INSERT INTO students (
+                student_id, name, bus_number, bus_stop, photo_path,
+                parent_name, parent_phone, alerts_enabled
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                student_id,
+                name if name else student_id,
+                bus_number,
+                bus_stop,
+                photo_path,
+                parent_name,
+                parent_phone,
+                1 if str(alerts_enabled) != "0" else 0,
+            ),
         )
         conn.commit()
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
+        # Create login account with default password if missing.
+        default_password = "pass123"
+        password_to_set = initial_password if initial_password else default_password
+        user_result = create_user(
+            username=student_id,
+            password=password_to_set,
+            role="student",
+            student_id=student_id,
+        )
+        account = {
+            "created": False,
+            "username": student_id,
+            "password": None,
+            "message": "Login account already exists",
+        }
+        if user_result.get("success"):
+            account = {
+                "created": True,
+                "username": student_id,
+                "password": password_to_set,
+                "message": "Login created",
+            }
+        else:
+            err = (user_result.get("error") or "").lower()
+            if "unique constraint failed" not in err:
+                account = {
+                    "created": False,
+                    "username": student_id,
+                    "password": None,
+                    "message": f"Login creation failed: {user_result.get('error')}",
+                }
+
+        return jsonify({"status": "student added", "account": account}), 201
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
     finally:
         conn.close()
 
-    return jsonify({"status": "student added"})
+
+@app.route("/students/<student_id>/profile", methods=["GET"])
+@require_auth
+def get_student_profile(student_id):
+    claims = get_jwt()
+    role = claims.get("role")
+    current_user_id = get_jwt_identity()
+
+    conn = get_connection()
+    try:
+        if role == "student":
+            user = conn.execute(
+                "SELECT student_id FROM users WHERE id = ?", (str(current_user_id),)
+            ).fetchone()
+            if not user or user["student_id"] != student_id:
+                return jsonify({"error": "You can only view your own profile"}), 403
+        elif role != "admin":
+            return jsonify({"error": "Only student/admin can access this endpoint"}), 403
+
+        row = conn.execute(
+            """
+            SELECT student_id, name, bus_number, bus_stop,
+                   parent_name, parent_phone, alerts_enabled, on_leave
+            FROM students WHERE student_id = ?
+            """,
+            (student_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Student not found"}), 404
+        return jsonify(dict(row)), 200
+    finally:
+        conn.close()
+
+
+@app.route("/students/<student_id>/profile", methods=["POST"])
+@require_auth
+def update_student_profile(student_id):
+    claims = get_jwt()
+    role = claims.get("role")
+    current_user_id = get_jwt_identity()
+    data = request.json or {}
+
+    conn = get_connection()
+    try:
+        if role == "student":
+            user = conn.execute(
+                "SELECT student_id FROM users WHERE id = ?", (str(current_user_id),)
+            ).fetchone()
+            if not user or user["student_id"] != student_id:
+                return jsonify({"error": "You can only update your own profile"}), 403
+        elif role != "admin":
+            return jsonify({"error": "Only student/admin can access this endpoint"}), 403
+
+        exists = conn.execute(
+            "SELECT student_id FROM students WHERE student_id = ?", (student_id,)
+        ).fetchone()
+        if not exists:
+            return jsonify({"error": "Student not found"}), 404
+
+        name = (data.get("name") or "").strip() or None
+        bus_stop = (data.get("bus_stop") or "").strip() or None
+        parent_name = (data.get("parent_name") or "").strip() or None
+        parent_phone = (data.get("parent_phone") or "").strip() or None
+        alerts_enabled = data.get("alerts_enabled")
+        if alerts_enabled is None:
+            alerts_enabled = 1
+        alerts_enabled = 1 if str(alerts_enabled) not in ("0", "false", "False") else 0
+
+        if parent_phone and not parent_phone.startswith("+"):
+            return jsonify({"error": "Parent phone must include country code (e.g. +91...)"}), 400
+
+        if role == "admin" and "bus_number" in data:
+            bus_number = (data.get("bus_number") or "").strip() or None
+            conn.execute(
+                """
+                UPDATE students
+                SET name = COALESCE(?, name),
+                    bus_stop = ?,
+                    bus_number = COALESCE(?, bus_number),
+                    parent_name = ?,
+                    parent_phone = ?,
+                    alerts_enabled = ?
+                WHERE student_id = ?
+                """,
+                (name, bus_stop, bus_number, parent_name, parent_phone, alerts_enabled, student_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE students
+                SET name = COALESCE(?, name),
+                    bus_stop = ?,
+                    parent_name = ?,
+                    parent_phone = ?,
+                    alerts_enabled = ?
+                WHERE student_id = ?
+                """,
+                (name, bus_stop, parent_name, parent_phone, alerts_enabled, student_id),
+            )
+
+        conn.commit()
+
+        updated = conn.execute(
+            """
+            SELECT student_id, name, bus_number, bus_stop,
+                   parent_name, parent_phone, alerts_enabled, on_leave
+            FROM students WHERE student_id = ?
+            """,
+            (student_id,),
+        ).fetchone()
+        return jsonify({"status": "updated", "student": dict(updated)}), 200
+    finally:
+        conn.close()
+
 
 @app.route("/students/toggle_leave", methods=["POST"])
 def toggle_leave():
-    """
-    Toggle leave status for a student.
-    Note: This endpoint is accessible without authentication to allow quick leave requests
-    from leave.html, but in production you may want to add @require_auth
-    """
     try:
-        data = request.json
-        
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
+        data = request.json or {}
         student_id = data.get("student_id")
-        
         if not student_id:
             return jsonify({"error": "ID missing"}), 400
 
         conn = get_connection()
-        # Check current status
-        student = conn.execute("SELECT on_leave FROM students WHERE student_id = ?", (student_id,)).fetchone()
-        
+        student = conn.execute(
+            "SELECT on_leave FROM students WHERE student_id = ?", (student_id,)
+        ).fetchone()
         if not student:
             conn.close()
             return jsonify({"error": "Student not found"}), 404
 
-        # Toggle: if 0 set to 1, if 1 set to 0
-        new_status = 1 if student[0] == 0 else 0
-        conn.execute("UPDATE students SET on_leave = ? WHERE student_id = ?", (new_status, student_id))
+        new_status = 1 if student["on_leave"] == 0 else 0
+        conn.execute(
+            "UPDATE students SET on_leave = ? WHERE student_id = ?",
+            (new_status, student_id),
+        )
         conn.commit()
         conn.close()
-
         return jsonify({"status": "Success", "on_leave": new_status}), 200
-    
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Error in toggle_leave")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
 # ============================================================================
-# DRIVER ENDPOINTS
+# STUDENT STOP LOCATION + LIVE BUS VIEW
+# ============================================================================
+
+@app.route("/students/<student_id>/stop-location", methods=["GET"])
+def get_student_stop_location(student_id):
+    conn = get_connection()
+    try:
+        student = conn.execute(
+            """
+            SELECT student_id, bus_stop_lat, bus_stop_lng, bus_stop_label
+            FROM students WHERE student_id = ?
+            """,
+            (student_id,),
+        ).fetchone()
+        if not student:
+            return jsonify({"error": "Student not found"}), 404
+
+        return jsonify(
+            {
+                "student_id": student["student_id"],
+                "bus_stop_lat": student["bus_stop_lat"],
+                "bus_stop_lng": student["bus_stop_lng"],
+                "bus_stop_label": student["bus_stop_label"],
+            }
+        ), 200
+    finally:
+        conn.close()
+
+
+@app.route("/students/<student_id>/stop-location", methods=["POST"])
+@require_auth
+def set_student_stop_location(student_id):
+    claims = get_jwt()
+    role = claims.get("role")
+    current_user_id = get_jwt_identity()
+
+    conn = get_connection()
+    try:
+        if role == "student":
+            user = conn.execute(
+                "SELECT student_id FROM users WHERE id = ?", (str(current_user_id),)
+            ).fetchone()
+            if not user or user["student_id"] != student_id:
+                return jsonify({"error": "You can only update your own stop location"}), 403
+
+        data = request.json or {}
+        lat = data.get("lat")
+        lng = data.get("lng")
+        label = data.get("label")
+
+        if lat is None or lng is None:
+            return jsonify({"error": "lat and lng are required"}), 400
+
+        conn.execute(
+            """
+            UPDATE students
+            SET bus_stop_lat = ?, bus_stop_lng = ?, bus_stop_label = ?, bus_stop = COALESCE(?, bus_stop)
+            WHERE student_id = ?
+            """,
+            (float(lat), float(lng), label, label, student_id),
+        )
+        conn.commit()
+        return jsonify({"status": "saved"}), 200
+    finally:
+        conn.close()
+
+
+@app.route("/bus/location/current", methods=["GET"])
+def bus_location_current():
+    student_id = request.args.get("student_id")
+    if not student_id:
+        return jsonify({"error": "student_id required"}), 400
+
+    conn = get_connection()
+    try:
+        student = conn.execute(
+            "SELECT bus_number FROM students WHERE student_id = ?", (student_id,)
+        ).fetchone()
+        if not student:
+            return jsonify({"error": "Student not found"}), 404
+
+        trip = conn.execute(
+            """
+            SELECT id, bus_number, trip_type, started_at
+            FROM bus_trips
+            WHERE bus_number = ? AND status = 'ACTIVE'
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            (student["bus_number"],),
+        ).fetchone()
+        if not trip:
+            return jsonify({"error": "No active trip for this bus"}), 404
+
+        loc = conn.execute(
+            """
+            SELECT lat, lng, speed, heading, COALESCE(timestamp, recorded_at) AS ts
+            FROM bus_locations
+            WHERE trip_id = ?
+            ORDER BY COALESCE(timestamp, recorded_at) DESC
+            LIMIT 1
+            """,
+            (trip["id"],),
+        ).fetchone()
+        if not loc:
+            return jsonify({"error": "No location updates yet"}), 404
+
+        return jsonify(
+            {
+                "trip_id": trip["id"],
+                "bus_number": trip["bus_number"],
+                "trip_type": trip["trip_type"],
+                "lat": loc["lat"],
+                "lng": loc["lng"],
+                "speed": loc["speed"],
+                "heading": loc["heading"],
+                "timestamp": loc["ts"],
+            }
+        ), 200
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# DRIVER ROUTES
 # ============================================================================
 
 @app.route('/driver/dashboard', methods=['GET'])
 @require_auth
+@require_role("driver")
 def driver_dashboard():
-    """
-    Get driver dashboard data (driver info, stats, students on bus)
-    Requires: JWT token with role='driver'
-    """
     try:
-        from flask_jwt_extended import get_jwt_identity
-        
         user_id = int(get_jwt_identity())
         conn = get_connection()
-        user = conn.execute(
-            "SELECT username, student_id FROM users WHERE id = ?", 
-            (user_id,)
-        ).fetchone()
+        user = conn.execute("SELECT student_id FROM users WHERE id = ?", (user_id,)).fetchone()
         conn.close()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
-        
-        driver_id = user[1]  # student_id linked to driver
+
+        driver_id = user["student_id"]
         driver_info = get_driver(driver_id)
-        
         if not driver_info:
             return jsonify({"error": "Driver not found"}), 404
-        
+
         stats = get_driver_stats(driver_id)
-        
-        return jsonify({
-            "driver": driver_info,
-            "statistics": stats
-        }), 200
-    
-    except Exception as e:
+        return jsonify({"driver": driver_info, "statistics": stats}), 200
+    except Exception as exc:
         logger.exception("Error in driver_dashboard")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route('/driver/log-boarding', methods=['POST'])
 @require_auth
+@require_role("driver")
 def driver_log_boarding():
-    """
-    Log a student boarding the bus
-    Request body: { "student_id": "ekc23cs001" }
-    """
     try:
-        from flask_jwt_extended import get_jwt_identity
-        
-        data = request.get_json()
-        if not data or not data.get('student_id'):
+        data = request.get_json() or {}
+        student_id = data.get('student_id')
+        if not student_id:
             return jsonify({"error": "Student ID required"}), 400
-        
-        student_id = data['student_id']
-        
-        # Get driver_id from user's linked student_id (driver_id)
-        user_id = int(get_jwt_identity())
-        conn = get_connection()
-        user = conn.execute(
-            "SELECT student_id FROM users WHERE id = ?", 
-            (user_id,)
-        ).fetchone()
-        conn.close()
-        
-        if not user:
+
+        driver_id = _driver_id_from_user(get_jwt_identity())
+        if not driver_id:
             return jsonify({"error": "User not found"}), 404
-        
-        driver_id = user[0]
+
         result = log_student_boarding(driver_id, student_id)
-        
         if not result['success']:
             return jsonify({"error": result['error']}), 400
-        
+
+        alert_result = send_boarded_alert_for_student(student_id, driver_id)
+
         return jsonify({
             "message": result['message'],
             "student_id": student_id,
-            "action": "IN"
+            "action": "IN",
+            "alert": alert_result,
         }), 200
-    
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Error in driver_log_boarding")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route('/driver/log-alighting', methods=['POST'])
 @require_auth
+@require_role("driver")
 def driver_log_alighting():
-    """
-    Log a student alighting from the bus
-    Request body: { "student_id": "ekc23cs001" }
-    """
     try:
-        from flask_jwt_extended import get_jwt_identity
-        
-        data = request.get_json()
-        if not data or not data.get('student_id'):
+        data = request.get_json() or {}
+        student_id = data.get('student_id')
+        if not student_id:
             return jsonify({"error": "Student ID required"}), 400
-        
-        student_id = data['student_id']
-        
-        # Get driver_id from user's linked student_id (driver_id)
-        user_id = int(get_jwt_identity())
-        conn = get_connection()
-        user = conn.execute(
-            "SELECT student_id FROM users WHERE id = ?", 
-            (user_id,)
-        ).fetchone()
-        conn.close()
-        
-        if not user:
+
+        driver_id = _driver_id_from_user(get_jwt_identity())
+        if not driver_id:
             return jsonify({"error": "User not found"}), 404
-        
-        driver_id = user[0]
+
         result = log_student_alighting(driver_id, student_id)
-        
         if not result['success']:
             return jsonify({"error": result['error']}), 400
-        
+
         return jsonify({
             "message": result['message'],
             "student_id": student_id,
             "action": "OUT"
         }), 200
-    
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Error in driver_log_alighting")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route('/driver/students-on-bus', methods=['GET'])
 @require_auth
+@require_role("driver")
 def driver_get_students_on_bus():
-    """
-    Get list of students currently on the bus
-    """
     try:
-        from flask_jwt_extended import get_jwt_identity
-        
-        user_id = get_jwt_identity()
-        conn = get_connection()
-        user = conn.execute(
-            "SELECT student_id FROM users WHERE id = ?", 
-            (user_id,)
-        ).fetchone()
-        conn.close()
-        
-        if not user:
+        driver_id = _driver_id_from_user(get_jwt_identity())
+        if not driver_id:
             return jsonify({"error": "User not found"}), 404
-        
-        driver_id = user[0]
+
         students = get_students_on_bus(driver_id)
-        
-        return jsonify({
-            "driver_id": driver_id,
-            "students_on_bus": students,
-            "count": len(students)
-        }), 200
-    
-    except Exception as e:
+        return jsonify({"driver_id": driver_id, "students_on_bus": students, "count": len(students)}), 200
+    except Exception as exc:
         logger.exception("Error in driver_get_students_on_bus")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route('/driver/check-student/<student_id>', methods=['GET'])
 @require_auth
+@require_role("driver")
 def driver_check_student(student_id):
-    """
-    Check if a student is currently on the bus
-    Also verifies the student is assigned to the driver's bus
-    """
     try:
-        from flask_jwt_extended import get_jwt_identity
-        
-        # Get driver_id from JWT
-        user_id = int(get_jwt_identity())
-        conn = get_connection()
-        user = conn.execute(
-            "SELECT student_id FROM users WHERE id = ?", 
-            (user_id,)
-        ).fetchone()
-        
-        if not user:
-            conn.close()
+        driver_id = _driver_id_from_user(get_jwt_identity())
+        if not driver_id:
             return jsonify({"error": "User not found"}), 404
-        
-        driver_id = user[0]
-        
-        # Get driver's bus number
+
+        conn = get_connection()
         driver = conn.execute(
             "SELECT bus_number FROM drivers WHERE driver_id = ?",
-            (driver_id,)
+            (driver_id,),
         ).fetchone()
-        
         if not driver:
             conn.close()
             return jsonify({"error": "Driver not found"}), 404
-        
-        driver_bus_number = driver[0]
-        
-        # Get student info
+
         student = conn.execute(
             "SELECT name, bus_stop, bus_number FROM students WHERE student_id = ?",
-            (student_id,)
+            (student_id,),
         ).fetchone()
         conn.close()
-        
         if not student:
             return jsonify({"error": "Student not found"}), 404
-        
-        # Check if student belongs to this driver's bus
-        if student[2] != driver_bus_number:
-            return jsonify({"error": f"Student {student_id} is not assigned to your bus ({driver_bus_number})"}), 403
-        
+
+        if student["bus_number"] != driver["bus_number"]:
+            return jsonify({"error": f"Student {student_id} is not assigned to your bus ({driver['bus_number']})"}), 403
+
         on_bus = is_student_on_bus(student_id)
-        
-        return jsonify({
-            "student_id": student_id,
-            "name": student[0],
-            "bus_stop": student[1],
-            "on_bus": on_bus
-        }), 200
-    
-    except Exception as e:
+        return jsonify(
+            {
+                "student_id": student_id,
+                "name": student["name"],
+                "bus_stop": student["bus_stop"],
+                "on_bus": on_bus,
+            }
+        ), 200
+    except Exception as exc:
         logger.exception("Error in driver_check_student")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route('/driver/daily-summary', methods=['GET'])
 @require_auth
+@require_role("driver")
 def driver_get_daily_summary():
-    """
-    Get summary of the day's activity
-    Optional query param: date (YYYY-MM-DD)
-    """
     try:
-        from flask_jwt_extended import get_jwt_identity
-        
-        user_id = int(get_jwt_identity())
-        conn = get_connection()
-        user = conn.execute(
-            "SELECT student_id FROM users WHERE id = ?", 
-            (user_id,)
-        ).fetchone()
-        conn.close()
-        
-        if not user:
+        driver_id = _driver_id_from_user(get_jwt_identity())
+        if not driver_id:
             return jsonify({"error": "User not found"}), 404
-        
-        driver_id = user[0]
+
         date = request.args.get('date')
         summary = get_daily_summary(driver_id, date)
-        
         return jsonify(summary), 200
-    
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Error in driver_get_daily_summary")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route('/driver/route-students', methods=['GET'])
+@require_auth
+@require_role("driver")
+def driver_route_students():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "User not found"}), 404
+
+    conn = get_connection()
+    try:
+        driver = conn.execute(
+            "SELECT bus_number FROM drivers WHERE driver_id = ?",
+            (driver_id,),
+        ).fetchone()
+        if not driver:
+            return jsonify({"error": "Driver not found"}), 404
+
+        rows = conn.execute(
+            """
+            SELECT student_id, name, bus_stop, bus_stop_lat, bus_stop_lng, bus_stop_label, on_leave
+            FROM students
+            WHERE bus_number = ?
+            ORDER BY name
+            """,
+            (driver["bus_number"],),
+        ).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# TRIPS + LOCATION INGEST
+# ============================================================================
+
+@app.route('/driver/trips/start', methods=['POST'])
+@require_auth
+@require_role("driver")
+def start_driver_trip():
+    data = request.json or {}
+    trip_type = data.get("trip_type")
+    if trip_type not in ("TO_SCHOOL", "TO_HOME"):
+        return jsonify({"error": "trip_type must be TO_SCHOOL or TO_HOME"}), 400
+
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "User not found"}), 404
+
+    conn = get_connection()
+    try:
+        driver = conn.execute(
+            "SELECT bus_number FROM drivers WHERE driver_id = ?",
+            (driver_id,),
+        ).fetchone()
+        if not driver:
+            return jsonify({"error": "Driver not found"}), 404
+
+        active = conn.execute(
+            "SELECT * FROM bus_trips WHERE driver_id = ? AND status = 'ACTIVE'",
+            (driver_id,),
+        ).fetchone()
+        if active:
+            return jsonify({"error": "Driver already has an active trip", "trip": dict(active)}), 400
+
+        now = _utc_iso()
+        service_date = datetime.now().strftime("%Y-%m-%d")
+        cur = conn.execute(
+            """
+            INSERT INTO bus_trips (driver_id, bus_number, trip_type, status, started_at, service_date)
+            VALUES (?, ?, ?, 'ACTIVE', ?, ?)
+            """,
+            (driver_id, driver["bus_number"], trip_type, now, service_date),
+        )
+        conn.commit()
+        trip_id = cur.lastrowid
+
+        row = conn.execute("SELECT * FROM bus_trips WHERE id = ?", (trip_id,)).fetchone()
+        return jsonify({"message": "Trip started", "trip": dict(row)}), 201
+    finally:
+        conn.close()
+
+
+@app.route('/driver/trips/end', methods=['POST'])
+@require_auth
+@require_role("driver")
+def end_driver_trip():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "User not found"}), 404
+
+    conn = get_connection()
+    try:
+        trip = conn.execute(
+            "SELECT * FROM bus_trips WHERE driver_id = ? AND status = 'ACTIVE' ORDER BY started_at DESC LIMIT 1",
+            (driver_id,),
+        ).fetchone()
+        if not trip:
+            return jsonify({"error": "No active trip"}), 404
+
+        conn.execute(
+            "UPDATE bus_trips SET status = 'COMPLETED', ended_at = ? WHERE id = ?",
+            (_utc_iso(), trip["id"]),
+        )
+        conn.commit()
+
+        updated = conn.execute("SELECT * FROM bus_trips WHERE id = ?", (trip["id"],)).fetchone()
+        return jsonify({"message": "Trip ended", "trip": dict(updated)}), 200
+    finally:
+        conn.close()
+
+
+@app.route('/driver/trips/current', methods=['GET'])
+@require_auth
+@require_role("driver")
+def current_driver_trip():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "User not found"}), 404
+
+    conn = get_connection()
+    try:
+        trip = conn.execute(
+            "SELECT * FROM bus_trips WHERE driver_id = ? AND status = 'ACTIVE' ORDER BY started_at DESC LIMIT 1",
+            (driver_id,),
+        ).fetchone()
+        if not trip:
+            return jsonify({"trip": None}), 200
+
+        location = conn.execute(
+            """
+            SELECT lat, lng, speed, heading, COALESCE(timestamp, recorded_at) AS ts, source
+            FROM bus_locations
+            WHERE trip_id = ?
+            ORDER BY COALESCE(timestamp, recorded_at) DESC
+            LIMIT 1
+            """,
+            (trip["id"],),
+        ).fetchone()
+
+        return jsonify({
+            "trip": dict(trip),
+            "last_location": dict(location) if location else None,
+        }), 200
+    finally:
+        conn.close()
+
+
+@app.route('/driver/location', methods=['POST'])
+@require_auth
+@require_role("driver")
+def ingest_driver_location():
+    data = request.json or {}
+    lat = data.get("lat")
+    lng = data.get("lng")
+    speed = data.get("speed")
+    heading = data.get("heading")
+    ts = data.get("timestamp") or _utc_iso()
+
+    if lat is None or lng is None:
+        return jsonify({"error": "lat and lng are required"}), 400
+
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "User not found"}), 404
+
+    conn = get_connection()
+    try:
+        trip = conn.execute(
+            "SELECT * FROM bus_trips WHERE driver_id = ? AND status = 'ACTIVE' ORDER BY started_at DESC LIMIT 1",
+            (driver_id,),
+        ).fetchone()
+        if not trip:
+            return jsonify({"error": "No active trip. Start a trip first."}), 400
+
+        conn.execute(
+            """
+            INSERT INTO bus_locations (
+                trip_id, driver_id, bus_number, source,
+                lat, lng, speed, heading, recorded_at, timestamp
+            )
+            VALUES (?, ?, ?, 'DRIVER_PHONE', ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                trip["id"],
+                trip["driver_id"],
+                trip["bus_number"],
+                float(lat),
+                float(lng),
+                speed,
+                heading,
+                ts,
+                ts,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    alerts = evaluate_not_boarded_alerts(trip["id"], float(lat), float(lng))
+    return jsonify({"status": "ok", "trip_id": trip["id"], "alerts_triggered": alerts}), 200
+
+
+@app.route('/gps/devices/location', methods=['POST'])
+def ingest_gps_device_location():
+    secret = request.headers.get("X-GPS-DEVICE-SECRET", "")
+    expected = os.getenv("GPS_DEVICE_SHARED_SECRET", "")
+    if not expected:
+        return jsonify({"error": "GPS device secret not configured"}), 500
+    if secret != expected:
+        return jsonify({"error": "Unauthorized device"}), 401
+
+    data = request.json or {}
+    bus_number = data.get("bus_number")
+    lat = data.get("lat")
+    lng = data.get("lng")
+    speed = data.get("speed")
+    heading = data.get("heading")
+    ts = data.get("timestamp") or _utc_iso()
+
+    if not bus_number or lat is None or lng is None:
+        return jsonify({"error": "bus_number, lat, lng are required"}), 400
+
+    conn = get_connection()
+    try:
+        trip = conn.execute(
+            """
+            SELECT * FROM bus_trips
+            WHERE bus_number = ? AND status = 'ACTIVE'
+            ORDER BY started_at DESC LIMIT 1
+            """,
+            (bus_number,),
+        ).fetchone()
+        if not trip:
+            return jsonify({"error": "No active trip for this bus"}), 404
+
+        conn.execute(
+            """
+            INSERT INTO bus_locations (
+                trip_id, driver_id, bus_number, source,
+                lat, lng, speed, heading, recorded_at, timestamp
+            )
+            VALUES (?, ?, ?, 'GPS_DEVICE', ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                trip["id"],
+                trip["driver_id"],
+                trip["bus_number"],
+                float(lat),
+                float(lng),
+                speed,
+                heading,
+                ts,
+                ts,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    alerts = evaluate_not_boarded_alerts(trip["id"], float(lat), float(lng))
+    return jsonify({"status": "ok", "trip_id": trip["id"], "alerts_triggered": alerts}), 200
+
+
+# ============================================================================
+# NOTIFICATIONS
+# ============================================================================
+
+@app.route('/admin/notifications', methods=['GET'])
+@require_auth
+@require_role("admin")
+def admin_notifications():
+    status = request.args.get("status")
+    event_type = request.args.get("event_type")
+    limit = min(int(request.args.get("limit", 200)), 500)
+
+    query = """
+        SELECT n.*, s.name AS student_name
+        FROM notifications n
+        LEFT JOIN students s ON s.student_id = n.student_id
+        WHERE 1=1
+    """
+    params = []
+    if status:
+        query += " AND n.status = ?"
+        params.append(status)
+    if event_type:
+        query += " AND n.event_type = ?"
+        params.append(event_type)
+    query += " ORDER BY n.created_at DESC LIMIT ?"
+    params.append(limit)
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(query, params).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+    finally:
+        conn.close()
+
+
+@app.route('/driver/notifications/recent', methods=['GET'])
+@require_auth
+@require_role("driver")
+def driver_notifications_recent():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "User not found"}), 404
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT n.*, s.name AS student_name
+            FROM notifications n
+            JOIN bus_trips t ON t.id = n.trip_id
+            LEFT JOIN students s ON s.student_id = n.student_id
+            WHERE t.driver_id = ?
+            ORDER BY n.created_at DESC
+            LIMIT 100
+            """,
+            (driver_id,),
+        ).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+    finally:
+        conn.close()
+
+
+@app.route('/student/notifications', methods=['GET'])
+@require_auth
+def student_notifications():
+    claims = get_jwt()
+    user_id = get_jwt_identity()
+    role = claims.get("role")
+
+    requested_student_id = request.args.get("student_id")
+
+    conn = get_connection()
+    try:
+        if role == "student":
+            user = conn.execute(
+                "SELECT student_id FROM users WHERE id = ?",
+                (str(user_id),),
+            ).fetchone()
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            student_id = user["student_id"]
+        elif role == "admin":
+            student_id = requested_student_id
+            if not student_id:
+                return jsonify({"error": "student_id query param required for admin"}), 400
+        else:
+            return jsonify({"error": "Only student/admin can access this endpoint"}), 403
+
+        rows = conn.execute(
+            """
+            SELECT * FROM notifications
+            WHERE student_id = ?
+            ORDER BY created_at DESC
+            LIMIT 100
+            """,
+            (student_id,),
+        ).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+    finally:
+        conn.close()
+
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
-    # Ensure DB schema exists and seed students from disk (helpful for development)
-    try:
-        init_db()
-    except Exception:
-        # init_db may be no-op if DB already initialized
-        pass
-
-
-    seed_students_from_disk()
-
-
-    # Debug helper: list all registered routes (development only)
-    @app.route('/debug/routes')
-    def debug_routes():
-        routes = []
-        for rule in app.url_map.iter_rules():
-            routes.append({
-                'rule': rule.rule,
-                'methods': sorted(list(rule.methods - set(['HEAD', 'OPTIONS'])))
-            })
-        return jsonify({'routes': routes})
-
+    init_db()
     app.run(debug=True)

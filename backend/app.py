@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import argparse
 import logging
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -281,8 +282,17 @@ def add_student():
     folder = os.path.join(UPLOAD_DIR, student_id)
     os.makedirs(folder, exist_ok=True)
 
-    filename = secure_filename(photo.filename)
-    photo_path = os.path.join(folder, filename)
+    original_name = secure_filename(photo.filename or "")
+    _, ext = os.path.splitext(original_name)
+    if not ext:
+        ext = ".jpg"
+    safe_name = f"profile{ext}"
+    # Ensure only one photo exists for the student by clearing the folder.
+    for entry in os.listdir(folder):
+        path = os.path.join(folder, entry)
+        if os.path.isfile(path):
+            os.remove(path)
+    photo_path = os.path.join(folder, safe_name)
     photo.save(photo_path)
 
     conn = get_connection()
@@ -367,7 +377,7 @@ def get_student_profile(student_id):
         row = conn.execute(
             """
             SELECT student_id, name, bus_number, bus_stop,
-                   parent_name, parent_phone, alerts_enabled, on_leave
+                   parent_name, parent_phone, alerts_enabled, on_leave, photo_path
             FROM students WHERE student_id = ?
             """,
             (student_id,),
@@ -450,12 +460,67 @@ def update_student_profile(student_id):
         updated = conn.execute(
             """
             SELECT student_id, name, bus_number, bus_stop,
-                   parent_name, parent_phone, alerts_enabled, on_leave
+                   parent_name, parent_phone, alerts_enabled, on_leave, photo_path
             FROM students WHERE student_id = ?
             """,
             (student_id,),
         ).fetchone()
         return jsonify({"status": "updated", "student": dict(updated)}), 200
+    finally:
+        conn.close()
+
+
+@app.route("/students/<student_id>/photo", methods=["POST"])
+@require_auth
+def update_student_photo(student_id):
+    claims = get_jwt()
+    role = claims.get("role")
+    current_user_id = get_jwt_identity()
+
+    conn = get_connection()
+    try:
+        if role == "student":
+            user = conn.execute(
+                "SELECT student_id FROM users WHERE id = ?", (str(current_user_id),)
+            ).fetchone()
+            if not user or user["student_id"] != student_id:
+                return jsonify({"error": "You can only update your own photo"}), 403
+        elif role != "admin":
+            return jsonify({"error": "Only student/admin can access this endpoint"}), 403
+
+        student = conn.execute(
+            "SELECT student_id FROM students WHERE student_id = ?", (student_id,)
+        ).fetchone()
+        if not student:
+            return jsonify({"error": "Student not found"}), 404
+
+        photo = request.files.get("photo")
+        if not photo:
+            return jsonify({"error": "Photo is required"}), 400
+
+        folder = os.path.join(UPLOAD_DIR, student_id)
+        os.makedirs(folder, exist_ok=True)
+
+        original_name = secure_filename(photo.filename or "")
+        _, ext = os.path.splitext(original_name)
+        if not ext:
+            ext = ".jpg"
+        safe_name = f"profile{ext}"
+        # Ensure only one photo exists for the student by clearing the folder.
+        for entry in os.listdir(folder):
+            path = os.path.join(folder, entry)
+            if os.path.isfile(path):
+                os.remove(path)
+        photo_path = os.path.join(folder, safe_name)
+        photo.save(photo_path)
+
+        conn.execute(
+            "UPDATE students SET photo_path = ? WHERE student_id = ?",
+            (photo_path, student_id),
+        )
+        conn.commit()
+
+        return jsonify({"status": "updated", "photo_path": photo_path}), 200
     finally:
         conn.close()
 
@@ -1150,4 +1215,9 @@ def health():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True)
+    parser = argparse.ArgumentParser(description="Bus attendance backend")
+    parser.add_argument("--host", default=os.environ.get("BACKEND_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("BACKEND_PORT", "5000")))
+    parser.add_argument("--debug", action="store_true", default=os.environ.get("BACKEND_DEBUG", "1") == "1")
+    args = parser.parse_args()
+    app.run(host=args.host, port=args.port, debug=args.debug)

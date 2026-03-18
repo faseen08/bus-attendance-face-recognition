@@ -102,6 +102,22 @@
                     <input id="profileAlertsEnabled" type="checkbox" checked>
                     Enable parent alerts
                 </label>
+                <div class="md:col-span-2">
+                    <label class="block text-sm text-slate-400 mb-2">Profile Photo</label>
+                    <div class="flex flex-col md:flex-row gap-4 items-start">
+                        <img id="profilePhotoPreview" alt="Profile photo" class="h-20 w-20 rounded-lg object-cover border border-slate-600 hidden">
+                        <div class="flex-1 w-full">
+                            <input id="profilePhotoInput" type="file" accept="image/*" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                            <div class="flex flex-col md:flex-row gap-3 mt-3">
+                                <button onclick="uploadProfilePhoto()" id="profilePhotoBtn" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg font-semibold transition w-full md:w-auto">
+                                    Update Photo
+                                </button>
+                                <div id="profilePhotoMsg" class="hidden p-2 rounded-lg text-sm"></div>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">Choose a clear face photo for attendance recognition.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
             <button onclick="saveProfileDetails()" id="profileSaveBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-lg font-bold transition w-full md:w-auto">
                 Save My Details
@@ -580,6 +596,58 @@
             document.getElementById('profileParentName').value = student.parent_name || '';
             document.getElementById('profileParentPhone').value = student.parent_phone || '';
             document.getElementById('profileAlertsEnabled').checked = student.alerts_enabled !== 0;
+            setProfilePhotoPreview(student.photo_path);
+        }
+
+        function setProfilePhotoPreview(photoPath, bustCache = false) {
+            const preview = document.getElementById('profilePhotoPreview');
+            if (!photoPath) {
+                preview.classList.add('hidden');
+                preview.removeAttribute('src');
+                return;
+            }
+            const cacheBuster = bustCache ? `?t=${Date.now()}` : '';
+            preview.src = `${API_BASE}/${photoPath}${cacheBuster}`;
+            preview.classList.remove('hidden');
+        }
+
+        async function uploadProfilePhoto() {
+            const input = document.getElementById('profilePhotoInput');
+            const msg = document.getElementById('profilePhotoMsg');
+            const btn = document.getElementById('profilePhotoBtn');
+            const file = input.files && input.files[0];
+
+            if (!file) {
+                msg.className = 'p-2 rounded-lg text-sm bg-amber-600 text-white block';
+                msg.innerText = 'Please choose a photo before uploading.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Uploading...';
+
+            try {
+                const form = new FormData();
+                form.append('photo', file);
+                const response = await apiCall(`/students/${currentStudentId}/photo`, {
+                    method: 'POST',
+                    body: form
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || 'Failed to update photo');
+                }
+                setProfilePhotoPreview(data.photo_path, true);
+                input.value = '';
+                msg.className = 'p-2 rounded-lg text-sm bg-green-600 text-white block';
+                msg.innerText = 'Photo updated successfully.';
+            } catch (error) {
+                msg.className = 'p-2 rounded-lg text-sm bg-red-600 text-white block';
+                msg.innerText = `Failed to update photo: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Update Photo';
+            }
         }
 
         async function saveProfileDetails() {

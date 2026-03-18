@@ -9,7 +9,10 @@ import time
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STUDENTS_DIR = os.path.join(BASE_DIR, "data", "students")
-TOLERANCE = 0.6  # Adjust as needed (0.55-0.65)
+# Lower tolerance = stricter matching (fewer false positives).
+TOLERANCE = float(os.environ.get("FACE_TOLERANCE", "0.5"))
+# Require a minimum gap between best and second-best match.
+MIN_MARGIN = float(os.environ.get("FACE_MIN_MARGIN", "0.05"))
 
 last_seen = {}
 
@@ -81,7 +84,10 @@ def real_time_face_recognition():
             if known_encodings:
                 face_distances = face_recognition.face_distance(known_encodings, face_encoding)
                 best_match_index = np.argmin(face_distances)
-                if face_distances[best_match_index] <= TOLERANCE:
+                best_distance = face_distances[best_match_index]
+                second_best = np.partition(face_distances, 1)[1] if len(face_distances) > 1 else 1.0
+
+                if best_distance <= TOLERANCE and (second_best - best_distance) >= MIN_MARGIN:
                     name = known_ids[best_match_index]
 
                     now = time.time()

@@ -29,6 +29,10 @@ function _getApiBase() {
   }
   const stored = localStorage.getItem(API_BASE_KEY);
   if (stored) return stored;
+  // If frontend is served by backend under /frontend, use same origin by default.
+  if (window.location && window.location.pathname.startsWith('/frontend/')) {
+    return window.location.origin;
+  }
   // If served over HTTPS (e.g., ngrok), use same origin by default.
   if (window.location && window.location.protocol === 'https:') {
     return window.location.origin;

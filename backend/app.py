@@ -192,6 +192,74 @@ def change_password():
         conn.close()
 
 
+@app.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.json or {}
+    role = (data.get("role") or "").strip()
+    username = (data.get("username") or data.get("id") or "").strip()
+    new_password = data.get("new_password")
+
+    if role not in ("student", "driver", "admin"):
+        return jsonify({"error": "Invalid role"}), 400
+    if not username or not new_password:
+        return jsonify({"error": "username and new_password are required"}), 400
+    if len(str(new_password)) < 6:
+        return jsonify({"error": "New password must be at least 6 characters"}), 400
+
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT id, username, role, student_id FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if not user or user["role"] != role:
+            return jsonify({"error": "Account not found for that role"}), 404
+
+        if role == "student":
+            parent_phone = (data.get("parent_phone") or "").strip()
+            if not parent_phone:
+                return jsonify({"error": "Parent phone is required"}), 400
+            row = conn.execute(
+                "SELECT parent_phone FROM students WHERE student_id = ?",
+                (user["student_id"],),
+            ).fetchone()
+            if not row or not row["parent_phone"]:
+                return jsonify({"error": "Parent phone not set. Contact admin."}), 400
+            if row["parent_phone"] != parent_phone:
+                return jsonify({"error": "Parent phone does not match"}), 400
+
+        if role == "driver":
+            phone = (data.get("phone") or "").strip()
+            if not phone:
+                return jsonify({"error": "Phone is required"}), 400
+            row = conn.execute(
+                "SELECT phone FROM drivers WHERE driver_id = ?",
+                (username,),
+            ).fetchone()
+            if not row or not row["phone"]:
+                return jsonify({"error": "Driver phone not set. Contact admin."}), 400
+            if row["phone"] != phone:
+                return jsonify({"error": "Phone does not match"}), 400
+
+        if role == "admin":
+            reset_code = (data.get("reset_code") or "").strip()
+            expected = os.environ.get("ADMIN_RESET_CODE", "")
+            if not expected:
+                return jsonify({"error": "Admin reset code not configured"}), 400
+            if reset_code != expected:
+                return jsonify({"error": "Invalid admin reset code"}), 400
+
+        new_hash = hash_password(new_password)
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (new_hash, user["id"]),
+        )
+        conn.commit()
+        return jsonify({"status": "Password reset successful"}), 200
+    finally:
+        conn.close()
+
+
 # ============================================================================
 # ADMIN REQUESTS (student/driver add, leave requests)
 # ============================================================================

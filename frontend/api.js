@@ -8,15 +8,69 @@
  * and sends it with every message to the server.
  */
 
-const API_BASE = "http://127.0.0.1:5000";
-const TOKEN_KEY = "authToken"; // Key name for storing token in browser storage
+const DEFAULT_API_BASE = "http://127.0.0.1:5000";
+const API_BASE_KEY = "apiBaseUrl";
+
+function _getApiBaseFromQuery() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const api = params.get('api');
+    return api ? api.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function _getApiBase() {
+  const fromQuery = _getApiBaseFromQuery();
+  if (fromQuery) {
+    localStorage.setItem(API_BASE_KEY, fromQuery);
+    return fromQuery;
+  }
+  const stored = localStorage.getItem(API_BASE_KEY);
+  if (stored) return stored;
+  // If served by Live Server (common dev port 5500), default to local backend on 5000.
+  if (window.location && window.location.hostname === '127.0.0.1' && window.location.port === '5500') {
+    return 'http://127.0.0.1:5000';
+  }
+  // If frontend is served by backend under /frontend, use same origin by default.
+  if (window.location && window.location.pathname.startsWith('/frontend/')) {
+    return window.location.origin;
+  }
+  // If served over HTTPS (e.g., ngrok), use same origin by default.
+  if (window.location && window.location.protocol === 'https:') {
+    return window.location.origin;
+  }
+  return DEFAULT_API_BASE;
+}
+
+const API_BASE = _getApiBase();
+const TOKEN_KEY = "authToken"; // Legacy key (fallback)
+const ROLE_TOKEN_KEYS = {
+  student: "authToken_student",
+  driver: "authToken_driver",
+  admin: "authToken_admin"
+};
 
 /**
  * Get the stored authentication token from browser storage
  * 
  * @returns {string|null} The JWT token or null if not logged in
  */
+function _currentRole() {
+  return window.APP_ROLE || null;
+}
+
+function _roleKey(role) {
+  return ROLE_TOKEN_KEYS[role] || TOKEN_KEY;
+}
+
 function getToken() {
+  const role = _currentRole();
+  if (role) {
+    const roleToken = localStorage.getItem(_roleKey(role));
+    if (roleToken) return roleToken;
+  }
   return localStorage.getItem(TOKEN_KEY);
 }
 
@@ -25,14 +79,29 @@ function getToken() {
  * 
  * @param {string} token - JWT token to store
  */
-function setToken(token) {
+function setToken(token, role) {
+  const targetRole = role || _currentRole();
+  if (targetRole) {
+    localStorage.setItem(_roleKey(targetRole), token);
+    return;
+  }
   localStorage.setItem(TOKEN_KEY, token);
 }
 
 /**
  * Remove authentication token (logout)
  */
-function clearToken() {
+function clearToken(role) {
+  const targetRole = role || _currentRole();
+  if (targetRole) {
+    localStorage.removeItem(_roleKey(targetRole));
+    return;
+  }
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+function clearAllTokens() {
+  Object.values(ROLE_TOKEN_KEYS).forEach((key) => localStorage.removeItem(key));
   localStorage.removeItem(TOKEN_KEY);
 }
 
@@ -110,8 +179,11 @@ async function apiCall(endpoint, options = {}) {
       requestConfig.body = JSON.stringify(options.body);
     }
   } else {
-    // Set default Content-Type for non-FormData requests
-    headers['Content-Type'] = 'application/json';
+    // For GET/HEAD, avoid forcing content-type headers.
+    // This reduces unnecessary preflight requests in browsers.
+    if (method !== 'GET' && method !== 'HEAD') {
+      headers['Content-Type'] = 'application/json';
+    }
   }
   
   try {
@@ -130,8 +202,8 @@ async function apiCall(endpoint, options = {}) {
       console.error(`API Error (${response.status}):`, errorData);
 
       // Common stale-token case after JWT identity format changes
-      if (response.status === 422 && (errorData.msg || '').toLowerCase().includes('subject must be a string')) {
-        clearToken();
+    if (response.status === 422 && (errorData.msg || '').toLowerCase().includes('subject must be a string')) {
+        clearAllTokens();
         window.location.href = 'index.html';
       }
 
@@ -167,17 +239,19 @@ async function apiCallJSON(endpoint, options = {}) {
 
   // If token is invalid/expired, force logout and redirect to login
   if (response.status === 401) {
-    clearToken();
+    clearAllTokens();
     window.location.href = 'index.html';
     return null;
   }
   
-  try {
-    return await response.json();
-  } catch (error) {
-    console.error("Failed to parse response as JSON:", error);
-    return null;
+  const payload = await response.clone().json().catch(() => null);
+  if (!response.ok) {
+    if (payload && typeof payload === 'object') {
+      return payload;
+    }
+    return { error: `Request failed with status ${response.status}` };
   }
+  return payload;
 }
 
 /**
@@ -210,7 +284,7 @@ async function login(username, password, role) {
   
   // Store token if login successful
   if (data.token) {
-    setToken(data.token);
+    setToken(data.token, role);
   }
   
   return data;
@@ -222,6 +296,6 @@ async function login(username, password, role) {
  * Clears token from storage
  */
 function logout() {
-  clearToken();
+  clearAllTokens();
   window.location.href = 'index.html';
 }

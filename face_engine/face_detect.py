@@ -18,8 +18,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STUDENTS_DIR = os.path.join(BASE_DIR, "data", "students")
 
 # Matching thresholds (tune for your camera/environment)
-SIMILARITY_THRESHOLD = 0.45
-AMBIGUITY_MARGIN = 0.05
+SIMILARITY_THRESHOLD = float(os.environ.get("FACE_SIM_THRESHOLD", "0.45"))
+AMBIGUITY_MARGIN = float(os.environ.get("FACE_MIN_MARGIN", "0.05"))
 
 # Runtime behavior
 FRAME_SCALE = 0.5

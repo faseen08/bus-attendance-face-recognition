@@ -11,7 +11,60 @@
 <form id="studentForm" class="space-y-4 max-w-sm">
   <input name="student_id" placeholder="Student ID (Roll No)" class="w-full p-2 rounded bg-slate-800" required />
   <input name="name" placeholder="Full Name" class="w-full p-2 rounded bg-slate-800" required />
+  <label class="block text-sm text-slate-300">Education Type</label>
+  <select name="education_type" id="educationType" class="w-full p-2 rounded bg-slate-800">
+    <option value="">Select type</option>
+    <option value="college">College</option>
+    <option value="school">School</option>
+  </select>
+  <div id="collegeFields" class="space-y-2 hidden">
+    <select name="college_type" class="w-full p-2 rounded bg-slate-800">
+      <option value="">Select College Type</option>
+      <option value="college of engineering">College of Engineering</option>
+      <option value="college of architecture">College of Architecture</option>
+      <option value="college of arts and science">College of Arts and Science</option>
+    </select>
+    <select name="college_year" class="w-full p-2 rounded bg-slate-800">
+      <option value="">Select Year</option>
+      <option value="1st Year">1st Year</option>
+      <option value="2nd Year">2nd Year</option>
+      <option value="3rd Year">3rd Year</option>
+      <option value="4th Year">4th Year</option>
+      <option value="5th Year">5th Year</option>
+    </select>
+    <input name="college_department" placeholder="Department (e.g., CSE)" class="w-full p-2 rounded bg-slate-800" />
+  </div>
+  <div id="schoolFields" class="space-y-2 hidden">
+    <select name="school_class" class="w-full p-2 rounded bg-slate-800">
+      <option value="">Select Class</option>
+      <option value="Pre-Primary">Pre-Primary</option>
+      <option value="LKG">LKG</option>
+      <option value="UKG">UKG</option>
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+      <option value="9">9</option>
+      <option value="10">10</option>
+      <option value="11">11</option>
+      <option value="12">12</option>
+    </select>
+    <input name="school_division" placeholder="Division (e.g., A)" class="w-full p-2 rounded bg-slate-800" />
+  </div>
+  <input name="bus_number" placeholder="Bus Number" class="w-full p-2 rounded bg-slate-800" required />
   <input name="bus_stop" placeholder="Bus Stop Name" class="w-full p-2 rounded bg-slate-800" required />
+  <input name="parent_name" placeholder="Parent Name (optional)" class="w-full p-2 rounded bg-slate-800" />
+  <input name="parent_phone" placeholder="Parent Phone (+91...)" class="w-full p-2 rounded bg-slate-800" />
+  <label class="flex items-center gap-2 text-sm text-slate-300">
+    <input type="checkbox" name="alerts_enabled" value="1" checked />
+    Enable parent alerts
+  </label>
+  <input name="initial_password" placeholder="Initial password (optional)" class="w-full p-2 rounded bg-slate-800" />
+  <p class="text-xs text-slate-400">If empty, default will be: <code>pass123</code></p>
   
   <input type="file" name="photo" accept="image/*" class="w-full" required />
   
@@ -23,9 +76,23 @@
   <p id="msg" class="mt-4"></p>
 
   <!-- Include API utility module -->
+  <script>window.APP_ROLE = 'admin';</script>
   <script src="api.js"></script>
 
   <script>
+    const educationType = document.getElementById("educationType");
+    const collegeFields = document.getElementById("collegeFields");
+    const schoolFields = document.getElementById("schoolFields");
+
+    function updateEducationFields() {
+      const value = educationType.value;
+      collegeFields.classList.toggle("hidden", value !== "college");
+      schoolFields.classList.toggle("hidden", value !== "school");
+    }
+
+    educationType.addEventListener("change", updateEducationFields);
+    updateEducationFields();
+
     /**
      * Add Student Form Handler
      * 
@@ -46,12 +113,20 @@
           body: form // FormData is sent as-is
         });
 
+        const data = await response.json().catch(() => ({}));
+
         if (response && response.ok) {
-          msg.textContent = "✅ Student added successfully";
+          let accountNote = "";
+          if (data.account?.created) {
+            accountNote = ` | Login: ${data.account.username} / ${data.account.password}`;
+          } else if (data.account?.message) {
+            accountNote = ` | ${data.account.message}`;
+          }
+          msg.textContent = `✅ Student added successfully${accountNote}`;
           msg.className = "mt-4 text-green-400";
           e.target.reset();
         } else {
-          msg.textContent = "❌ Failed to add student";
+          msg.textContent = `❌ Failed to add student: ${data.error || 'Unknown error'}`;
           msg.className = "mt-4 text-red-400";
         }
       } catch (error) {
@@ -64,4 +139,3 @@
 
 </body>
 </html>
-

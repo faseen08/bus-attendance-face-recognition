@@ -6,6 +6,7 @@
     <title>Driver Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
+    <script>window.APP_ROLE = 'driver';</script>
     <script src="api.js"></script>
 </head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 text-white min-h-screen">
@@ -133,6 +134,28 @@
             </div>
         </section>
 
+        <!-- Trip Controls -->
+        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-4">
+            <h2 class="text-xl font-bold flex items-center gap-2">
+                <i data-feather="navigation-2" class="w-5 h-5"></i> Trip Controls
+            </h2>
+            <div class="flex flex-col md:flex-row gap-3">
+                <button onclick="startTrip('TO_SCHOOL')" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold">Start To-School</button>
+                <button onclick="startTrip('TO_HOME')" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg font-semibold">Start Return</button>
+                <button onclick="endTrip()" class="bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg font-semibold">End Trip</button>
+                <button onclick="sendCurrentLocation()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold">Send Location Now</button>
+            </div>
+            <div id="tripInfo" class="text-slate-300 text-sm">No active trip</div>
+        </section>
+
+        <!-- Recent Alerts -->
+        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-3">
+            <h2 class="text-xl font-bold flex items-center gap-2">
+                <i data-feather="bell" class="w-5 h-5"></i> Recent Parent Alerts
+            </h2>
+            <div id="recentAlerts" class="text-slate-300 text-sm">No alerts yet.</div>
+        </section>
+
     </main>
 
     <!-- Toast Notification -->
@@ -143,14 +166,19 @@
         window.addEventListener('DOMContentLoaded', () => {
             feather.replace();
             loadDashboard();
-            // Refresh every 5 seconds
-            setInterval(loadDashboard, 5000);
+            // Lower polling frequency to reduce API load and dashboard jitter.
+            setInterval(loadDashboard, 15000);
         });
 
         let currentStudentId = null;
+        let dashboardLoading = false;
+        let locationTimer = null;
+        let activeTripId = null;
 
         // ========== LOAD DASHBOARD DATA ==========
         async function loadDashboard() {
+            if (dashboardLoading) return;
+            dashboardLoading = true;
             try {
                 const response = await apiCallJSON('/driver/dashboard', { method: 'GET' });
                 
@@ -176,7 +204,107 @@
 
             } catch (err) {
                 console.error('Dashboard error:', err);
+            } finally {
+                dashboardLoading = false;
             }
+
+            await loadCurrentTrip();
+            await loadRecentAlerts();
+        }
+
+        async function startTrip(tripType) {
+            const res = await apiCallJSON('/driver/trips/start', {
+                method: 'POST',
+                body: { trip_type: tripType }
+            });
+            if (!res || res.error) {
+                showToast(res?.error || 'Failed to start trip', 'error');
+                return;
+            }
+            showToast(`Trip started (${tripType})`, 'info');
+            await loadCurrentTrip();
+        }
+
+        async function endTrip() {
+            const res = await apiCallJSON('/driver/trips/end', { method: 'POST' });
+            if (!res || res.error) {
+                showToast(res?.error || 'Failed to end trip', 'error');
+                return;
+            }
+            showToast('Trip ended', 'info');
+            await loadCurrentTrip();
+        }
+
+        async function loadCurrentTrip() {
+            const el = document.getElementById('tripInfo');
+            const res = await apiCallJSON('/driver/trips/current', { method: 'GET' });
+            if (!res || res.error || !res.trip) {
+                el.innerText = 'No active trip';
+                activeTripId = null;
+                stopLocationAutoPush();
+                return;
+            }
+
+            activeTripId = res.trip.id;
+            el.innerHTML = `
+                <p><span class="text-slate-400">Trip:</span> <strong>${res.trip.trip_type}</strong></p>
+                <p><span class="text-slate-400">Started:</span> ${res.trip.started_at}</p>
+                <p><span class="text-slate-400">Last Location:</span> ${res.last_location ? `${Number(res.last_location.lat).toFixed(5)}, ${Number(res.last_location.lng).toFixed(5)} at ${res.last_location.timestamp}` : 'Not sent yet'}</p>
+            `;
+            startLocationAutoPush();
+        }
+
+        function startLocationAutoPush() {
+            if (locationTimer) return;
+            locationTimer = setInterval(sendCurrentLocation, 10000);
+        }
+
+        function stopLocationAutoPush() {
+            if (!locationTimer) return;
+            clearInterval(locationTimer);
+            locationTimer = null;
+        }
+
+        function sendCurrentLocation() {
+            if (!activeTripId) return;
+            if (!navigator.geolocation) {
+                showToast('Geolocation not supported', 'warning');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const payload = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    speed: position.coords.speed,
+                    heading: position.coords.heading
+                };
+                const res = await apiCallJSON('/driver/location', {
+                    method: 'POST',
+                    body: payload
+                });
+                if (res && !res.error && Array.isArray(res.alerts_triggered) && res.alerts_triggered.length > 0) {
+                    showToast(`Alerts sent: ${res.alerts_triggered.length}`, 'info');
+                    loadRecentAlerts();
+                }
+            }, () => {
+                // silent fail for background sends
+            }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+        }
+
+        async function loadRecentAlerts() {
+            const box = document.getElementById('recentAlerts');
+            const items = await apiCallJSON('/driver/notifications/recent', { method: 'GET' });
+            if (!items || items.error || items.length === 0) {
+                box.innerText = 'No alerts yet.';
+                return;
+            }
+            box.innerHTML = items.slice(0, 8).map((item) => `
+                <div class="border border-slate-700 rounded-lg p-2 mb-2">
+                    <p><strong>${item.student_name || item.student_id}</strong> - ${item.event_type}</p>
+                    <p class="text-xs text-slate-400">${item.status} at ${item.created_at}</p>
+                </div>
+            `).join('');
         }
 
         // ========== STUDENT LOOKUP ==========

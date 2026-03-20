@@ -28,10 +28,6 @@
     <i data-feather="users" class="w-4 h-4"></i> View Students
   </a>
   
-  <a href="leave.html" class="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg transition shadow-md">
-    <i data-feather="log-in" class="w-4 h-4"></i> Student Leave Portal
-  </a>
-
     <a href="add_student.html" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg transition shadow-md">
       <i data-feather="user-plus" class="w-4 h-4"></i>
       Add New Student
@@ -87,9 +83,9 @@
   </section>
 
   <!-- Load API utility before other scripts -->
+  <script>window.APP_ROLE = 'admin';</script>
   <script src="api.js"></script>
   <script src="app.js"></script>
   <script>feather.replace()</script>
 </body>
 </html>
-

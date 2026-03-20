@@ -6,6 +6,12 @@
     <title>Student Portal - My Attendance</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/feather-icons"></script>
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
 </head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 text-white min-h-screen">
 
@@ -45,6 +51,162 @@
             </div>
         </section>
 
+        <!-- Account Actions -->
+        <section class="bg-slate-800 rounded-xl p-4 shadow-lg mb-6 border border-slate-700">
+            <div class="flex flex-col md:flex-row gap-3">
+                <button
+                    onclick="togglePanel('profile')"
+                    id="toggleProfileBtn"
+                    class="bg-cyan-700 hover:bg-cyan-600 px-4 py-2 rounded-lg font-semibold transition"
+                >
+                    Edit My Details
+                </button>
+                <button
+                    onclick="togglePanel('password')"
+                    id="togglePasswordBtn"
+                    class="bg-violet-700 hover:bg-violet-600 px-4 py-2 rounded-lg font-semibold transition"
+                >
+                    Change My Password
+                </button>
+            </div>
+        </section>
+
+        <!-- Profile Update -->
+        <section id="profileSection" class="hidden bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
+            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <i data-feather="edit-3" class="w-5 h-5"></i> Update My Details
+            </h3>
+            <p class="text-slate-300 mb-4">Fill missing details (like parent phone) or update your profile.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Name</label>
+                    <input id="profileName" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Education Type</label>
+                    <select id="profileEducationType" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select type</option>
+                        <option value="college">College</option>
+                        <option value="school">School</option>
+                    </select>
+                </div>
+                <div id="profileCollegeFields" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">College Type</label>
+                    <select id="profileCollegeType" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select College Type</option>
+                        <option value="college of engineering">College of Engineering</option>
+                        <option value="college of architecture">College of Architecture</option>
+                        <option value="college of arts and science">College of Arts and Science</option>
+                    </select>
+                </div>
+                <div id="profileCollegeFieldsYear" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">College Year</label>
+                    <select id="profileCollegeYear" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select Year</option>
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                        <option value="5th Year">5th Year</option>
+                    </select>
+                </div>
+                <div id="profileCollegeFieldsDept" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">Department</label>
+                    <input id="profileCollegeDepartment" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div id="profileSchoolFields" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">Class</label>
+                    <select id="profileSchoolClass" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select Class</option>
+                        <option value="Pre-Primary">Pre-Primary</option>
+                        <option value="LKG">LKG</option>
+                        <option value="UKG">UKG</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                    </select>
+                </div>
+                <div id="profileSchoolFieldsDiv" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">Division</label>
+                    <input id="profileSchoolDivision" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Bus Number (Read only)</label>
+                    <input id="profileBusNumber" type="text" class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-slate-300" readonly>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Bus Stop Name</label>
+                    <input id="profileBusStop" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Parent Name</label>
+                    <input id="profileParentName" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Parent Phone (+countrycode...)</label>
+                    <input id="profileParentPhone" type="text" placeholder="+919876543210" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <label class="flex items-center gap-2 mt-7 text-slate-300">
+                    <input id="profileAlertsEnabled" type="checkbox" checked>
+                    Enable parent alerts
+                </label>
+                <div class="md:col-span-2">
+                    <label class="block text-sm text-slate-400 mb-2">Profile Photo</label>
+                    <div class="flex flex-col md:flex-row gap-4 items-start">
+                        <img id="profilePhotoPreview" alt="Profile photo" class="h-20 w-20 rounded-lg object-cover border border-slate-600 hidden">
+                        <div class="flex-1 w-full">
+                            <input id="profilePhotoInput" type="file" accept="image/*" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                            <div class="flex flex-col md:flex-row gap-3 mt-3">
+                                <button onclick="uploadProfilePhoto()" id="profilePhotoBtn" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg font-semibold transition w-full md:w-auto">
+                                    Update Photo
+                                </button>
+                                <div id="profilePhotoMsg" class="hidden p-2 rounded-lg text-sm"></div>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">Choose a clear face photo for attendance recognition.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button onclick="saveProfileDetails()" id="profileSaveBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-lg font-bold transition w-full md:w-auto">
+                Save My Details
+            </button>
+            <div id="profileMsg" class="mt-4 hidden p-3 rounded-lg"></div>
+        </section>
+
+        <!-- Password Change -->
+        <section id="passwordSection" class="hidden bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
+            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <i data-feather="lock" class="w-5 h-5"></i> Change Password
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Current Password</label>
+                    <input id="currentPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">New Password</label>
+                    <input id="newPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Confirm New Password</label>
+                    <input id="confirmPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+            </div>
+            <button onclick="changeMyPassword()" id="passwordSaveBtn" class="mt-4 bg-violet-600 hover:bg-violet-500 px-6 py-3 rounded-lg font-bold transition w-full md:w-auto">
+                Update Password
+            </button>
+            <div id="passwordMsg" class="mt-4 hidden p-3 rounded-lg"></div>
+        </section>
+
         <!-- Leave Control Section -->
         <section class="bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
             <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
@@ -55,6 +217,64 @@
                 Toggle Leave Status
             </button>
             <div id="leaveMsg" class="mt-4 hidden p-3 rounded-lg"></div>
+        </section>
+
+        <!-- Bus Stop Location -->
+        <section class="bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
+            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <i data-feather="map-pin" class="w-5 h-5"></i> My Bus Stop Location
+            </h3>
+            <p class="text-slate-300 mb-4">
+                Set your stop using your current location. This is used for stop-aware parent alerts.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <p class="text-slate-400 text-sm">Latitude</p>
+                    <p id="stopLat" class="font-mono">--</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 text-sm">Longitude</p>
+                    <p id="stopLng" class="font-mono">--</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 text-sm">Label</p>
+                    <p id="stopLabelView">--</p>
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-3">
+                <input
+                    id="stopLabelInput"
+                    type="text"
+                    placeholder="Optional label (e.g., Near Junction)"
+                    class="flex-1 p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+                />
+                <button onclick="useCurrentLocation()" id="useLocationBtn" class="bg-blue-600 hover:bg-blue-500 px-5 py-3 rounded-lg font-bold transition">
+                    Use Current Location
+                </button>
+                <button onclick="saveStopLocation()" id="saveStopBtn" class="bg-green-600 hover:bg-green-500 px-5 py-3 rounded-lg font-bold transition">
+                    Save Stop
+                </button>
+            </div>
+            <div id="stopMsg" class="mt-4 hidden p-3 rounded-lg"></div>
+            <div id="stopMap" class="mt-4 h-64 rounded-lg border border-slate-700"></div>
+        </section>
+
+        <!-- Live Bus Status -->
+        <section class="bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                    <i data-feather="navigation" class="w-5 h-5"></i> Live Bus Location
+                </h3>
+                <button onclick="loadLiveBusLocation()" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg font-semibold transition">
+                    Refresh Location
+                </button>
+            </div>
+            <div id="busLocationInfo" class="text-slate-300">
+                Waiting for location...
+            </div>
+            <div id="busMap" class="mt-4 h-64 rounded-lg border border-slate-700"></div>
         </section>
 
         <!-- Attendance Stats -->
@@ -101,7 +321,13 @@
     </main>
 
     <!-- Scripts -->
+    <script>window.APP_ROLE = 'student';</script>
     <script src="api.js"></script>
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
     <script>
         /**
          * Student Portal - Personal Attendance Dashboard
@@ -115,6 +341,15 @@
 
         let currentStudentId = null;
         let allAttendanceRecords = [];
+        let pendingStopLat = null;
+        let pendingStopLng = null;
+        let activePanel = null;
+        let stopMap = null;
+        let stopMarker = null;
+        let busMap = null;
+        let busMarker = null;
+        let busPath = null;
+        let busPathPoints = [];
 
         /**
          * Initialize the portal when page loads
@@ -131,27 +366,88 @@
             }
 
             // Load student data and attendance
+            initMaps();
             await loadStudentData();
             await loadStudentAttendance();
+            await loadStopLocation();
+            await loadLiveBusLocation();
+            setInterval(loadLiveBusLocation, 20000);
+
+            const educationSelect = document.getElementById('profileEducationType');
+            if (educationSelect) {
+                educationSelect.addEventListener('change', updateEducationFields);
+            }
+            updateEducationFields();
             
             feather.replace();
         };
+
+        function togglePanel(panelName) {
+            const profileSection = document.getElementById('profileSection');
+            const passwordSection = document.getElementById('passwordSection');
+            const profileBtn = document.getElementById('toggleProfileBtn');
+            const passwordBtn = document.getElementById('togglePasswordBtn');
+
+            if (activePanel === panelName) {
+                profileSection.classList.add('hidden');
+                passwordSection.classList.add('hidden');
+                profileBtn.textContent = 'Edit My Details';
+                passwordBtn.textContent = 'Change My Password';
+                activePanel = null;
+                return;
+            }
+
+            if (panelName === 'profile') {
+                profileSection.classList.remove('hidden');
+                passwordSection.classList.add('hidden');
+                profileBtn.textContent = 'Hide Details Form';
+                passwordBtn.textContent = 'Change My Password';
+            } else if (panelName === 'password') {
+                passwordSection.classList.remove('hidden');
+                profileSection.classList.add('hidden');
+                passwordBtn.textContent = 'Hide Password Form';
+                profileBtn.textContent = 'Edit My Details';
+            }
+            activePanel = panelName;
+        }
+
+        function initMaps() {
+            if (typeof L === 'undefined') return;
+            if (!stopMap) {
+                stopMap = L.map('stopMap').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(stopMap);
+                stopMap.on('click', (e) => {
+                    pendingStopLat = e.latlng.lat;
+                    pendingStopLng = e.latlng.lng;
+                    const label = document.getElementById('stopLabelInput').value.trim() || '--';
+                    updateStopView(pendingStopLat, pendingStopLng, label);
+                    const msg = document.getElementById('stopMsg');
+                    msg.className = 'mt-4 p-3 rounded-lg bg-blue-600 text-white block';
+                    msg.innerText = 'Stop pinned on map. Click Save Stop.';
+                });
+            }
+
+            if (!busMap) {
+                busMap = L.map('busMap').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(busMap);
+                busPath = L.polyline([], { color: '#4f46e5', weight: 4, opacity: 0.8 }).addTo(busMap);
+            }
+        }
 
         /**
          * Load student info from the students database
          */
         async function loadStudentData() {
             try {
-                // Fetch all students and find the current one
-                const students = await apiCallJSON('/students');
+                const student = await apiCallJSON(`/students/${currentStudentId}/profile`);
                 
-                if (!students) {
-                    throw new Error('Failed to load student data');
-                }
-
-                const student = students.find(s => s.student_id === currentStudentId);
-                
-                if (!student) {
+                if (!student || student.error) {
                     console.warn('Student not found in database');
                     document.getElementById('studentName').innerText = currentStudentId;
                     document.getElementById('studentId').innerText = currentStudentId;
@@ -164,6 +460,7 @@
 
                 // Update leave status display
                 updateLeaveDisplay(student.on_leave);
+                fillProfileForm(student);
 
             } catch (error) {
                 console.error('Error loading student data:', error);
@@ -352,6 +649,313 @@
             } else {
                 statusSpan.innerText = 'Active';
                 statusSpan.className = 'px-4 py-2 rounded-full font-bold text-lg bg-green-900/30 text-green-400 border border-green-800/50';
+            }
+        }
+
+        function fillProfileForm(student) {
+            document.getElementById('profileName').value = student.name || '';
+            document.getElementById('profileEducationType').value = student.education_type || '';
+            document.getElementById('profileCollegeType').value = student.college_type || '';
+            document.getElementById('profileCollegeYear').value = student.college_year || '';
+            document.getElementById('profileCollegeDepartment').value = student.college_department || '';
+            document.getElementById('profileSchoolClass').value = student.school_class || '';
+            document.getElementById('profileSchoolDivision').value = student.school_division || '';
+            updateEducationFields();
+            document.getElementById('profileBusNumber').value = student.bus_number || '';
+            document.getElementById('profileBusStop').value = student.bus_stop || '';
+            document.getElementById('profileParentName').value = student.parent_name || '';
+            document.getElementById('profileParentPhone').value = student.parent_phone || '';
+            document.getElementById('profileAlertsEnabled').checked = student.alerts_enabled !== 0;
+            setProfilePhotoPreview(student.photo_path);
+        }
+
+        function updateEducationFields() {
+            const value = document.getElementById('profileEducationType').value;
+            document.getElementById('profileCollegeFields').classList.toggle('hidden', value !== 'college');
+            document.getElementById('profileCollegeFieldsYear').classList.toggle('hidden', value !== 'college');
+            document.getElementById('profileCollegeFieldsDept').classList.toggle('hidden', value !== 'college');
+            document.getElementById('profileSchoolFields').classList.toggle('hidden', value !== 'school');
+            document.getElementById('profileSchoolFieldsDiv').classList.toggle('hidden', value !== 'school');
+        }
+
+        function setProfilePhotoPreview(photoPath, bustCache = false) {
+            const preview = document.getElementById('profilePhotoPreview');
+            if (!photoPath) {
+                preview.classList.add('hidden');
+                preview.removeAttribute('src');
+                return;
+            }
+            const cacheBuster = bustCache ? `?t=${Date.now()}` : '';
+            preview.src = `${API_BASE}/${photoPath}${cacheBuster}`;
+            preview.classList.remove('hidden');
+        }
+
+        async function uploadProfilePhoto() {
+            const input = document.getElementById('profilePhotoInput');
+            const msg = document.getElementById('profilePhotoMsg');
+            const btn = document.getElementById('profilePhotoBtn');
+            const file = input.files && input.files[0];
+
+            if (!file) {
+                msg.className = 'p-2 rounded-lg text-sm bg-amber-600 text-white block';
+                msg.innerText = 'Please choose a photo before uploading.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Uploading...';
+
+            try {
+                const form = new FormData();
+                form.append('photo', file);
+                const response = await apiCall(`/students/${currentStudentId}/photo`, {
+                    method: 'POST',
+                    body: form
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || 'Failed to update photo');
+                }
+                setProfilePhotoPreview(data.photo_path, true);
+                input.value = '';
+                msg.className = 'p-2 rounded-lg text-sm bg-green-600 text-white block';
+                msg.innerText = 'Photo updated successfully.';
+            } catch (error) {
+                msg.className = 'p-2 rounded-lg text-sm bg-red-600 text-white block';
+                msg.innerText = `Failed to update photo: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Update Photo';
+            }
+        }
+
+        async function saveProfileDetails() {
+            const msg = document.getElementById('profileMsg');
+            const btn = document.getElementById('profileSaveBtn');
+
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
+
+            try {
+                const payload = {
+                    name: document.getElementById('profileName').value.trim() || null,
+                    education_type: document.getElementById('profileEducationType').value || null,
+                    college_type: document.getElementById('profileCollegeType').value || null,
+                    college_year: document.getElementById('profileCollegeYear').value.trim() || null,
+                    college_department: document.getElementById('profileCollegeDepartment').value.trim() || null,
+                    school_class: document.getElementById('profileSchoolClass').value.trim() || null,
+                    school_division: document.getElementById('profileSchoolDivision').value.trim() || null,
+                    bus_stop: document.getElementById('profileBusStop').value.trim() || null,
+                    parent_name: document.getElementById('profileParentName').value.trim() || null,
+                    parent_phone: document.getElementById('profileParentPhone').value.trim() || null,
+                    alerts_enabled: document.getElementById('profileAlertsEnabled').checked ? 1 : 0
+                };
+
+                const response = await apiCallJSON(`/students/${currentStudentId}/profile`, {
+                    method: 'POST',
+                    body: payload
+                });
+
+                if (!response || response.error) {
+                    throw new Error(response?.error || 'Failed to update profile');
+                }
+
+                document.getElementById('studentName').innerText = response.student.name || currentStudentId;
+                fillProfileForm(response.student);
+
+                msg.className = 'mt-4 p-3 rounded-lg bg-green-600 text-white block';
+                msg.innerText = 'Details updated successfully.';
+            } catch (error) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-red-600 text-white block';
+                msg.innerText = `Failed to update details: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Save My Details';
+            }
+        }
+
+        async function changeMyPassword() {
+            const msg = document.getElementById('passwordMsg');
+            const btn = document.getElementById('passwordSaveBtn');
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-amber-600 text-white block';
+                msg.innerText = 'Please fill all password fields.';
+                return;
+            }
+            if (newPassword.length < 6) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-amber-600 text-white block';
+                msg.innerText = 'New password must be at least 6 characters.';
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-amber-600 text-white block';
+                msg.innerText = 'New password and confirm password do not match.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Updating...';
+            try {
+                const res = await apiCallJSON('/users/change-password', {
+                    method: 'POST',
+                    body: {
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    }
+                });
+                if (!res || res.error) {
+                    throw new Error(res?.error || 'Failed to update password');
+                }
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmPassword').value = '';
+
+                msg.className = 'mt-4 p-3 rounded-lg bg-green-600 text-white block';
+                msg.innerText = 'Password updated successfully.';
+            } catch (error) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-red-600 text-white block';
+                msg.innerText = `Failed to update password: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Update Password';
+            }
+        }
+
+        async function loadStopLocation() {
+            try {
+                const data = await apiCallJSON(`/students/${currentStudentId}/stop-location`);
+                if (!data || data.error) return;
+                updateStopView(data.bus_stop_lat, data.bus_stop_lng, data.bus_stop_label);
+            } catch (error) {
+                console.error('Failed to load stop location:', error);
+            }
+        }
+
+        function useCurrentLocation() {
+            const msg = document.getElementById('stopMsg');
+            const btn = document.getElementById('useLocationBtn');
+
+            if (!navigator.geolocation) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-red-600 text-white block';
+                msg.innerText = 'Geolocation is not supported in this browser.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Fetching...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    pendingStopLat = position.coords.latitude;
+                    pendingStopLng = position.coords.longitude;
+                    updateStopView(pendingStopLat, pendingStopLng, document.getElementById('stopLabelInput').value.trim() || '--');
+                    msg.className = 'mt-4 p-3 rounded-lg bg-blue-600 text-white block';
+                    msg.innerText = 'Current location captured. Click Save Stop.';
+                    btn.disabled = false;
+                    btn.innerText = 'Use Current Location';
+                },
+                (err) => {
+                    msg.className = 'mt-4 p-3 rounded-lg bg-red-600 text-white block';
+                    msg.innerText = `Unable to get location: ${err.message}`;
+                    btn.disabled = false;
+                    btn.innerText = 'Use Current Location';
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        async function saveStopLocation() {
+            const msg = document.getElementById('stopMsg');
+            const btn = document.getElementById('saveStopBtn');
+            const label = document.getElementById('stopLabelInput').value.trim();
+
+            if (pendingStopLat === null || pendingStopLng === null) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-amber-600 text-white block';
+                msg.innerText = 'Please click Use Current Location first.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
+            try {
+                const response = await apiCallJSON(`/students/${currentStudentId}/stop-location`, {
+                    method: 'POST',
+                    body: {
+                        lat: pendingStopLat,
+                        lng: pendingStopLng,
+                        label: label || null
+                    }
+                });
+                if (!response || response.error) {
+                    throw new Error(response?.error || 'Failed to save stop');
+                }
+                updateStopView(pendingStopLat, pendingStopLng, label || '--');
+                msg.className = 'mt-4 p-3 rounded-lg bg-green-600 text-white block';
+                msg.innerText = 'Bus stop saved successfully.';
+            } catch (error) {
+                msg.className = 'mt-4 p-3 rounded-lg bg-red-600 text-white block';
+                msg.innerText = `Failed to save: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Save Stop';
+            }
+        }
+
+        function updateStopView(lat, lng, label) {
+            document.getElementById('stopLat').innerText = lat !== null && lat !== undefined ? Number(lat).toFixed(6) : '--';
+            document.getElementById('stopLng').innerText = lng !== null && lng !== undefined ? Number(lng).toFixed(6) : '--';
+            document.getElementById('stopLabelView').innerText = label || '--';
+            if (lat !== null && lat !== undefined) pendingStopLat = Number(lat);
+            if (lng !== null && lng !== undefined) pendingStopLng = Number(lng);
+            if (lat !== null && lng !== null && stopMap) {
+                const pos = [Number(lat), Number(lng)];
+                if (!stopMarker) {
+                    stopMarker = L.marker(pos).addTo(stopMap);
+                } else {
+                    stopMarker.setLatLng(pos);
+                }
+                stopMarker.bindPopup(label || 'Bus Stop').openPopup();
+                stopMap.setView(pos, 16);
+            }
+        }
+
+        async function loadLiveBusLocation() {
+            const box = document.getElementById('busLocationInfo');
+            try {
+                const data = await apiCallJSON(`/bus/location/current?student_id=${encodeURIComponent(currentStudentId)}`);
+                if (!data || data.error) {
+                    box.innerHTML = `<p class="text-amber-400">${data?.error || 'Location not available'}</p>`;
+                    return;
+                }
+                box.innerHTML = `
+                    <p><span class="text-slate-400">Bus:</span> <strong>${data.bus_number}</strong> (${data.trip_type})</p>
+                    <p><span class="text-slate-400">Latitude:</span> <span class="font-mono">${Number(data.lat).toFixed(6)}</span></p>
+                    <p><span class="text-slate-400">Longitude:</span> <span class="font-mono">${Number(data.lng).toFixed(6)}</span></p>
+                    <p><span class="text-slate-400">Updated:</span> ${data.timestamp}</p>
+                `;
+                if (busMap) {
+                    const pos = [Number(data.lat), Number(data.lng)];
+                    if (!busMarker) {
+                        busMarker = L.marker(pos).addTo(busMap);
+                    } else {
+                        busMarker.setLatLng(pos);
+                    }
+                    // Track last 100 points to draw the path
+                    busPathPoints.push(pos);
+                    if (busPathPoints.length > 100) {
+                        busPathPoints.shift();
+                    }
+                    if (busPath) {
+                        busPath.setLatLngs(busPathPoints);
+                    }
+                    busMap.setView(pos, 16);
+                }
+            } catch (error) {
+                box.innerHTML = `<p class="text-red-400">Failed to load location.</p>`;
             }
         }
     </script>

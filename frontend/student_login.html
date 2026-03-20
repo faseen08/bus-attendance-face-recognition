@@ -36,6 +36,26 @@
 
         <div id="error-msg" class="mt-4 text-center text-red-400 font-medium hidden"></div>
 
+        <div class="mt-4 text-center">
+            <button id="forgotToggle" type="button" class="text-sm text-amber-400 hover:text-amber-300">
+                Forgot password?
+            </button>
+        </div>
+
+        <div id="forgotSection" class="mt-4 p-4 bg-slate-900 rounded-lg border border-slate-700 hidden">
+            <h3 class="text-sm font-semibold mb-3">Reset Password (Student)</h3>
+            <div class="space-y-3">
+                <input id="forgotId" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Roll Number">
+                <input id="forgotPhone" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Parent Phone (+91...)">
+                <input id="forgotNewPwd" type="password" class="w-full p-2 rounded bg-slate-800" placeholder="New Password">
+                <input id="forgotConfirmPwd" type="password" class="w-full p-2 rounded bg-slate-800" placeholder="Confirm New Password">
+                <button id="forgotBtn" type="button" class="w-full py-2 rounded bg-amber-600 hover:bg-amber-500 font-semibold">
+                    Reset Password
+                </button>
+            </div>
+            <div id="forgotMsg" class="mt-3 text-sm hidden"></div>
+        </div>
+
         <div class="mt-6 text-center">
             <a href="index.html" class="text-slate-500 hover:text-slate-300 text-sm flex items-center justify-center gap-2">
                 <i data-feather="arrow-left" class="w-4 h-4"></i> Back to Selection
@@ -55,6 +75,14 @@
         const uid = document.getElementById('uid');
         const pwd = document.getElementById('pwd');
         const errorMsg = document.getElementById('error-msg');
+        const forgotToggle = document.getElementById('forgotToggle');
+        const forgotSection = document.getElementById('forgotSection');
+        const forgotId = document.getElementById('forgotId');
+        const forgotPhone = document.getElementById('forgotPhone');
+        const forgotNewPwd = document.getElementById('forgotNewPwd');
+        const forgotConfirmPwd = document.getElementById('forgotConfirmPwd');
+        const forgotBtn = document.getElementById('forgotBtn');
+        const forgotMsg = document.getElementById('forgotMsg');
 
         // Handle Login
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -88,6 +116,66 @@
                 errorMsg.classList.remove('hidden');
                 btn.disabled = false;
                 btn.innerText = 'Sign In';
+            }
+        });
+
+        forgotToggle.addEventListener('click', () => {
+            forgotSection.classList.toggle('hidden');
+            forgotId.value = uid.value || '';
+            forgotMsg.classList.add('hidden');
+        });
+
+        forgotBtn.addEventListener('click', async () => {
+            forgotMsg.classList.add('hidden');
+            const username = (forgotId.value || '').trim();
+            const phone = (forgotPhone.value || '').trim();
+            const newPassword = forgotNewPwd.value;
+            const confirmPassword = forgotConfirmPwd.value;
+
+            if (!username || !phone || !newPassword || !confirmPassword) {
+                forgotMsg.className = 'mt-3 text-sm text-amber-400';
+                forgotMsg.textContent = 'Please fill all fields.';
+                forgotMsg.classList.remove('hidden');
+                return;
+            }
+            if (newPassword.length < 6) {
+                forgotMsg.className = 'mt-3 text-sm text-amber-400';
+                forgotMsg.textContent = 'Password must be at least 6 characters.';
+                forgotMsg.classList.remove('hidden');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                forgotMsg.className = 'mt-3 text-sm text-amber-400';
+                forgotMsg.textContent = 'Passwords do not match.';
+                forgotMsg.classList.remove('hidden');
+                return;
+            }
+
+            forgotBtn.disabled = true;
+            forgotBtn.innerText = 'Resetting...';
+            try {
+                const result = await apiCallJSON('/forgot-password', {
+                    method: 'POST',
+                    body: {
+                        role: 'student',
+                        username: username,
+                        parent_phone: phone,
+                        new_password: newPassword
+                    }
+                });
+                if (result?.error) {
+                    throw new Error(result.error);
+                }
+                forgotMsg.className = 'mt-3 text-sm text-green-400';
+                forgotMsg.textContent = 'Password reset successful. You can sign in now.';
+                forgotMsg.classList.remove('hidden');
+            } catch (error) {
+                forgotMsg.className = 'mt-3 text-sm text-red-400';
+                forgotMsg.textContent = `Reset failed: ${error.message}`;
+                forgotMsg.classList.remove('hidden');
+            } finally {
+                forgotBtn.disabled = false;
+                forgotBtn.innerText = 'Reset Password';
             }
         });
 

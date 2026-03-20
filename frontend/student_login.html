@@ -36,6 +36,73 @@
 
         <div id="error-msg" class="mt-4 text-center text-red-400 font-medium hidden"></div>
 
+        <div class="mt-4 text-center">
+            <button id="createToggle" type="button" class="text-sm text-amber-400 hover:text-amber-300">
+                Create student account
+            </button>
+        </div>
+
+        <div id="createSection" class="mt-4 p-4 bg-slate-900 rounded-lg border border-slate-700 hidden">
+            <h3 class="text-sm font-semibold mb-3">Request Student Account</h3>
+            <div class="space-y-3">
+                <input id="createId" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Roll Number">
+                <input id="createName" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Full Name">
+                <select id="createEducationType" class="w-full p-2 rounded bg-slate-800">
+                    <option value="">Select Education Type</option>
+                    <option value="college">College</option>
+                    <option value="school">School</option>
+                </select>
+                <div id="createCollegeFields" class="space-y-2 hidden">
+                    <select id="createCollegeType" class="w-full p-2 rounded bg-slate-800">
+                        <option value="">Select College Type</option>
+                        <option value="college of engineering">College of Engineering</option>
+                        <option value="college of architecture">College of Architecture</option>
+                        <option value="college of arts and science">College of Arts and Science</option>
+                    </select>
+                    <select id="createCollegeYear" class="w-full p-2 rounded bg-slate-800">
+                        <option value="">Select Year</option>
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                        <option value="5th Year">5th Year</option>
+                    </select>
+                    <input id="createCollegeDept" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Department (e.g., CSE)">
+                </div>
+                <div id="createSchoolFields" class="space-y-2 hidden">
+                    <select id="createSchoolClass" class="w-full p-2 rounded bg-slate-800">
+                        <option value="">Select Class</option>
+                        <option value="Pre-Primary">Pre-Primary</option>
+                        <option value="LKG">LKG</option>
+                        <option value="UKG">UKG</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                    </select>
+                    <input id="createSchoolDivision" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Division (e.g., A)">
+                </div>
+                <input id="createBusNumber" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Bus Number">
+                <input id="createBusStop" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Bus Stop Name">
+                <input id="createParentName" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Parent Name (optional)">
+                <input id="createParentPhone" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Parent Phone (+91...)">
+                <input id="createPassword" type="password" class="w-full p-2 rounded bg-slate-800" placeholder="Password">
+                <input id="createConfirmPassword" type="password" class="w-full p-2 rounded bg-slate-800" placeholder="Confirm Password">
+                <button id="createBtn" type="button" class="w-full py-2 rounded bg-amber-600 hover:bg-amber-500 font-semibold">
+                    Submit Request
+                </button>
+            </div>
+            <div id="createMsg" class="mt-3 text-sm hidden"></div>
+        </div>
+
         <div class="mt-6 text-center">
             <a href="index.html" class="text-slate-500 hover:text-slate-300 text-sm flex items-center justify-center gap-2">
                 <i data-feather="arrow-left" class="w-4 h-4"></i> Back to Selection
@@ -55,6 +122,26 @@
         const uid = document.getElementById('uid');
         const pwd = document.getElementById('pwd');
         const errorMsg = document.getElementById('error-msg');
+        const createToggle = document.getElementById('createToggle');
+        const createSection = document.getElementById('createSection');
+        const createId = document.getElementById('createId');
+        const createName = document.getElementById('createName');
+        const createEducationType = document.getElementById('createEducationType');
+        const createCollegeFields = document.getElementById('createCollegeFields');
+        const createSchoolFields = document.getElementById('createSchoolFields');
+        const createCollegeType = document.getElementById('createCollegeType');
+        const createCollegeYear = document.getElementById('createCollegeYear');
+        const createCollegeDept = document.getElementById('createCollegeDept');
+        const createSchoolClass = document.getElementById('createSchoolClass');
+        const createSchoolDivision = document.getElementById('createSchoolDivision');
+        const createBusNumber = document.getElementById('createBusNumber');
+        const createBusStop = document.getElementById('createBusStop');
+        const createParentName = document.getElementById('createParentName');
+        const createParentPhone = document.getElementById('createParentPhone');
+        const createPassword = document.getElementById('createPassword');
+        const createConfirmPassword = document.getElementById('createConfirmPassword');
+        const createBtn = document.getElementById('createBtn');
+        const createMsg = document.getElementById('createMsg');
 
         // Handle Login
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -88,6 +175,82 @@
                 errorMsg.classList.remove('hidden');
                 btn.disabled = false;
                 btn.innerText = 'Sign In';
+            }
+        });
+
+        function updateCreateEducationFields() {
+            const value = createEducationType.value;
+            createCollegeFields.classList.toggle('hidden', value !== 'college');
+            createSchoolFields.classList.toggle('hidden', value !== 'school');
+        }
+
+        createEducationType.addEventListener('change', updateCreateEducationFields);
+        updateCreateEducationFields();
+
+        createToggle.addEventListener('click', () => {
+            createSection.classList.toggle('hidden');
+            createId.value = uid.value || '';
+            createMsg.classList.add('hidden');
+        });
+
+        createBtn.addEventListener('click', async () => {
+            createMsg.classList.add('hidden');
+            const passwordVal = createPassword.value;
+            const confirmVal = createConfirmPassword.value;
+            if (!createId.value || !createBusNumber.value || !createBusStop.value || !createParentPhone.value || !passwordVal || !confirmVal) {
+                createMsg.className = 'mt-3 text-sm text-amber-400';
+                createMsg.textContent = 'Please fill required fields.';
+                createMsg.classList.remove('hidden');
+                return;
+            }
+            if (passwordVal.length < 6) {
+                createMsg.className = 'mt-3 text-sm text-amber-400';
+                createMsg.textContent = 'Password must be at least 6 characters.';
+                createMsg.classList.remove('hidden');
+                return;
+            }
+            if (passwordVal !== confirmVal) {
+                createMsg.className = 'mt-3 text-sm text-amber-400';
+                createMsg.textContent = 'Passwords do not match.';
+                createMsg.classList.remove('hidden');
+                return;
+            }
+
+            createBtn.disabled = true;
+            createBtn.innerText = 'Submitting...';
+            try {
+                const result = await apiCallJSON('/requests/student', {
+                    method: 'POST',
+                    body: {
+                        student_id: createId.value.trim(),
+                        name: createName.value.trim() || null,
+                        education_type: createEducationType.value || null,
+                        college_type: createCollegeType.value || null,
+                        college_year: createCollegeYear.value || null,
+                        college_department: createCollegeDept.value.trim() || null,
+                        school_class: createSchoolClass.value || null,
+                        school_division: createSchoolDivision.value.trim() || null,
+                        bus_number: createBusNumber.value.trim(),
+                        bus_stop: createBusStop.value.trim(),
+                        parent_name: createParentName.value.trim() || null,
+                        parent_phone: createParentPhone.value.trim(),
+                        password: passwordVal
+                    }
+                });
+                if (result?.error) {
+                    throw new Error(result.error);
+                }
+                createMsg.className = 'mt-3 text-sm text-green-400';
+                createMsg.textContent = 'Request submitted. Admin will approve your account.';
+                createMsg.classList.remove('hidden');
+                createSection.querySelectorAll('input, select').forEach((el) => { if (el.id !== 'createId') el.value = ''; });
+            } catch (error) {
+                createMsg.className = 'mt-3 text-sm text-red-400';
+                createMsg.textContent = `Request failed: ${error.message}`;
+                createMsg.classList.remove('hidden');
+            } finally {
+                createBtn.disabled = false;
+                createBtn.innerText = 'Submit Request';
             }
         });
 

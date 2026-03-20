@@ -134,6 +134,20 @@ CREATE TABLE IF NOT EXISTS trip_student_state (
     UNIQUE(trip_id, student_id)
 );
 
+-- Admin request queue (student/driver add requests, leave requests)
+CREATE TABLE IF NOT EXISTS admin_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_type TEXT NOT NULL, -- STUDENT_ADD | DRIVER_ADD | LEAVE
+    status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING | APPROVED | REJECTED
+    requester_role TEXT,
+    requester_id TEXT,
+    payload TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP,
+    reviewed_by TEXT,
+    reviewed_notes TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_bus_trips_driver_status ON bus_trips(driver_id, status);
 CREATE INDEX IF NOT EXISTS idx_bus_trips_bus_status ON bus_trips(bus_number, status);
 CREATE INDEX IF NOT EXISTS idx_bus_locations_trip_time ON bus_locations(trip_id, timestamp);

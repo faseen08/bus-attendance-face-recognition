@@ -1,6 +1,7 @@
 from datetime import datetime
 import os
 import argparse
+import json
 import shutil
 import logging
 
@@ -187,6 +188,351 @@ def change_password():
         )
         conn.commit()
         return jsonify({"status": "Password updated successfully"}), 200
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# ADMIN REQUESTS (student/driver add, leave requests)
+# ============================================================================
+
+@app.route("/requests/student", methods=["POST"])
+def request_student_add():
+    data = request.json or {}
+    student_id = (data.get("student_id") or "").strip()
+    name = (data.get("name") or "").strip() or student_id
+    bus_number = (data.get("bus_number") or "").strip()
+    bus_stop = (data.get("bus_stop") or "").strip()
+    parent_name = (data.get("parent_name") or "").strip() or None
+    parent_phone = (data.get("parent_phone") or "").strip()
+    password = data.get("password")
+    education_type = (data.get("education_type") or "").strip() or None
+    college_type = (data.get("college_type") or "").strip() or None
+    college_year = (data.get("college_year") or "").strip() or None
+    college_department = (data.get("college_department") or "").strip() or None
+    school_class = (data.get("school_class") or "").strip() or None
+    school_division = (data.get("school_division") or "").strip() or None
+
+    if not student_id or not bus_number or not bus_stop or not parent_phone or not password:
+        return jsonify({"error": "student_id, bus_number, bus_stop, parent_phone, password required"}), 400
+    if len(str(password)) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+    conn = get_connection()
+    try:
+        exists = conn.execute(
+            "SELECT 1 FROM students WHERE student_id = ?", (student_id,)
+        ).fetchone()
+        user_exists = conn.execute(
+            "SELECT 1 FROM users WHERE username = ?", (student_id,)
+        ).fetchone()
+        if exists or user_exists:
+            return jsonify({"error": "Student already exists"}), 400
+
+        payload = {
+            "student_id": student_id,
+            "name": name,
+            "bus_number": bus_number,
+            "bus_stop": bus_stop,
+            "parent_name": parent_name,
+            "parent_phone": parent_phone,
+            "password": password,
+            "education_type": education_type,
+            "college_type": college_type,
+            "college_year": college_year,
+            "college_department": college_department,
+            "school_class": school_class,
+            "school_division": school_division,
+        }
+        conn.execute(
+            """
+            INSERT INTO admin_requests (request_type, requester_role, requester_id, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("STUDENT_ADD", "student", student_id, json.dumps(payload)),
+        )
+        conn.commit()
+        return jsonify({"status": "request submitted"}), 201
+    finally:
+        conn.close()
+
+
+@app.route("/requests/driver", methods=["POST"])
+def request_driver_add():
+    data = request.json or {}
+    driver_id = (data.get("driver_id") or "").strip()
+    name = (data.get("name") or "").strip() or driver_id
+    bus_number = (data.get("bus_number") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    license_number = (data.get("license_number") or "").strip() or None
+    password = data.get("password")
+
+    if not driver_id or not name or not bus_number or not phone or not password:
+        return jsonify({"error": "driver_id, name, bus_number, phone, password required"}), 400
+    if len(str(password)) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+    conn = get_connection()
+    try:
+        exists = conn.execute(
+            "SELECT 1 FROM drivers WHERE driver_id = ?", (driver_id,)
+        ).fetchone()
+        user_exists = conn.execute(
+            "SELECT 1 FROM users WHERE username = ?", (driver_id,)
+        ).fetchone()
+        if exists or user_exists:
+            return jsonify({"error": "Driver already exists"}), 400
+
+        payload = {
+            "driver_id": driver_id,
+            "name": name,
+            "bus_number": bus_number,
+            "phone": phone,
+            "license_number": license_number,
+            "password": password,
+        }
+        conn.execute(
+            """
+            INSERT INTO admin_requests (request_type, requester_role, requester_id, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("DRIVER_ADD", "driver", driver_id, json.dumps(payload)),
+        )
+        conn.commit()
+        return jsonify({"status": "request submitted"}), 201
+    finally:
+        conn.close()
+
+
+@app.route("/requests/leave", methods=["POST"])
+@require_auth
+def request_leave():
+    data = request.json or {}
+    desired_status = 1 if str(data.get("desired_status", "1")) not in ("0", "false", "False") else 0
+    reason = (data.get("reason") or "").strip() or None
+    user_id = str(get_jwt_identity())
+    claims = get_jwt()
+
+    conn = get_connection()
+    try:
+        user = conn.execute(
+            "SELECT student_id FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not user or not user["student_id"]:
+            return jsonify({"error": "Only students can request leave"}), 403
+
+        student_id = user["student_id"]
+        pending = conn.execute(
+            """
+            SELECT 1 FROM admin_requests
+            WHERE request_type = 'LEAVE' AND status = 'PENDING' AND requester_id = ?
+            """,
+            (student_id,),
+        ).fetchone()
+        if pending:
+            return jsonify({"error": "Leave request already pending"}), 400
+
+        payload = {
+            "student_id": student_id,
+            "desired_status": desired_status,
+            "reason": reason,
+            "requested_by": claims.get("username"),
+        }
+        conn.execute(
+            """
+            INSERT INTO admin_requests (request_type, requester_role, requester_id, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("LEAVE", "student", student_id, json.dumps(payload)),
+        )
+        conn.commit()
+        return jsonify({"status": "request submitted"}), 201
+    finally:
+        conn.close()
+
+
+@app.route("/admin/requests", methods=["GET"])
+@require_auth
+@require_role("admin")
+def admin_requests():
+    req_type = request.args.get("type")
+    status = request.args.get("status", "PENDING")
+    conn = get_connection()
+    try:
+        query = "SELECT * FROM admin_requests WHERE 1=1"
+        params = []
+        if req_type:
+            query += " AND request_type = ?"
+            params.append(req_type)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC"
+        rows = conn.execute(query, params).fetchall()
+        return jsonify([dict(r) for r in rows]), 200
+    finally:
+        conn.close()
+
+
+@app.route("/admin/requests/<int:request_id>/approve", methods=["POST"])
+@require_auth
+@require_role("admin")
+def approve_request(request_id):
+    claims = get_jwt()
+    reviewer = claims.get("username")
+    notes = (request.json or {}).get("notes")
+    conn = get_connection()
+    try:
+        req = conn.execute(
+            "SELECT * FROM admin_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+        if not req:
+            return jsonify({"error": "Request not found"}), 404
+        if req["status"] != "PENDING":
+            return jsonify({"error": "Request already processed"}), 400
+
+        payload = json.loads(req["payload"] or "{}")
+        if req["request_type"] == "STUDENT_ADD":
+            student_id = payload.get("student_id")
+            exists = conn.execute(
+                "SELECT 1 FROM students WHERE student_id = ?", (student_id,)
+            ).fetchone()
+            user_exists = conn.execute(
+                "SELECT 1 FROM users WHERE username = ?", (student_id,)
+            ).fetchone()
+            if exists or user_exists:
+                return jsonify({"error": "Student already exists"}), 400
+
+            conn.execute(
+                """
+                INSERT INTO students (
+                    student_id, name, bus_number, bus_stop, photo_path,
+                    parent_name, parent_phone, alerts_enabled, on_leave,
+                    education_type, college_type, college_year, college_department,
+                    school_class, school_division
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    student_id,
+                    payload.get("name") or student_id,
+                    payload.get("bus_number"),
+                    payload.get("bus_stop"),
+                    None,
+                    payload.get("parent_name"),
+                    payload.get("parent_phone"),
+                    1,
+                    0,
+                    payload.get("education_type"),
+                    payload.get("college_type"),
+                    payload.get("college_year"),
+                    payload.get("college_department"),
+                    payload.get("school_class"),
+                    payload.get("school_division"),
+                ),
+            )
+
+            user_result = create_user(
+                username=student_id,
+                password=payload.get("password"),
+                role="student",
+                student_id=student_id,
+            )
+            if not user_result.get("success"):
+                return jsonify({"error": user_result.get("error")}), 400
+
+        elif req["request_type"] == "DRIVER_ADD":
+            driver_id = payload.get("driver_id")
+            exists = conn.execute(
+                "SELECT 1 FROM drivers WHERE driver_id = ?", (driver_id,)
+            ).fetchone()
+            user_exists = conn.execute(
+                "SELECT 1 FROM users WHERE username = ?", (driver_id,)
+            ).fetchone()
+            if exists or user_exists:
+                return jsonify({"error": "Driver already exists"}), 400
+
+            conn.execute(
+                """
+                INSERT INTO drivers (driver_id, name, bus_number, phone, license_number)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    driver_id,
+                    payload.get("name") or driver_id,
+                    payload.get("bus_number"),
+                    payload.get("phone"),
+                    payload.get("license_number"),
+                ),
+            )
+
+            user_result = create_user(
+                username=driver_id,
+                password=payload.get("password"),
+                role="driver",
+                student_id=None,
+            )
+            if not user_result.get("success"):
+                return jsonify({"error": user_result.get("error")}), 400
+
+        elif req["request_type"] == "LEAVE":
+            student_id = payload.get("student_id")
+            desired_status = 1 if str(payload.get("desired_status", "1")) not in ("0", "false", "False") else 0
+            conn.execute(
+                "UPDATE students SET on_leave = ? WHERE student_id = ?",
+                (desired_status, student_id),
+            )
+        else:
+            return jsonify({"error": "Unknown request type"}), 400
+
+        conn.execute(
+            """
+            UPDATE admin_requests
+            SET status = 'APPROVED',
+                reviewed_at = CURRENT_TIMESTAMP,
+                reviewed_by = ?,
+                reviewed_notes = ?
+            WHERE id = ?
+            """,
+            (reviewer, notes, request_id),
+        )
+        conn.commit()
+        return jsonify({"status": "approved"}), 200
+    finally:
+        conn.close()
+
+
+@app.route("/admin/requests/<int:request_id>/reject", methods=["POST"])
+@require_auth
+@require_role("admin")
+def reject_request(request_id):
+    claims = get_jwt()
+    reviewer = claims.get("username")
+    notes = (request.json or {}).get("notes")
+    conn = get_connection()
+    try:
+        req = conn.execute(
+            "SELECT * FROM admin_requests WHERE id = ?",
+            (request_id,),
+        ).fetchone()
+        if not req:
+            return jsonify({"error": "Request not found"}), 404
+        if req["status"] != "PENDING":
+            return jsonify({"error": "Request already processed"}), 400
+
+        conn.execute(
+            """
+            UPDATE admin_requests
+            SET status = 'REJECTED',
+                reviewed_at = CURRENT_TIMESTAMP,
+                reviewed_by = ?,
+                reviewed_notes = ?
+            WHERE id = ?
+            """,
+            (reviewer, notes, request_id),
+        )
+        conn.commit()
+        return jsonify({"status": "rejected"}), 200
     finally:
         conn.close()
 

@@ -146,6 +146,28 @@ def init_db():
         _mark_migration_applied(conn, migration)
         report["migrations_applied"].append(migration)
 
+    # Migration 012: admin requests queue
+    migration = "012_admin_requests"
+    if not _is_migration_applied(conn, migration):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                requester_role TEXT,
+                requester_id TEXT,
+                payload TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_at TIMESTAMP,
+                reviewed_by TEXT,
+                reviewed_notes TEXT
+            )
+            """
+        )
+        _mark_migration_applied(conn, migration)
+        report["migrations_applied"].append(migration)
+
     # Migration 005: trips + locations + notifications tables
     migration = "005_trip_and_alert_tables"
     if not _is_migration_applied(conn, migration):

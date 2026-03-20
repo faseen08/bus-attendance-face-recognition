@@ -36,6 +36,29 @@
 
         <div id="error-msg" class="mt-4 text-center text-red-400 font-medium hidden"></div>
 
+        <div class="mt-4 text-center">
+            <button id="createToggle" type="button" class="text-sm text-purple-400 hover:text-purple-300">
+                Create driver account
+            </button>
+        </div>
+
+        <div id="createSection" class="mt-4 p-4 bg-slate-900 rounded-lg border border-slate-700 hidden">
+            <h3 class="text-sm font-semibold mb-3">Request Driver Account</h3>
+            <div class="space-y-3">
+                <input id="createId" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Driver ID">
+                <input id="createName" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Full Name">
+                <input id="createBusNumber" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Bus Number">
+                <input id="createPhone" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="Phone (+91...)">
+                <input id="createLicense" type="text" class="w-full p-2 rounded bg-slate-800" placeholder="License Number (optional)">
+                <input id="createPassword" type="password" class="w-full p-2 rounded bg-slate-800" placeholder="Password">
+                <input id="createConfirmPassword" type="password" class="w-full p-2 rounded bg-slate-800" placeholder="Confirm Password">
+                <button id="createBtn" type="button" class="w-full py-2 rounded bg-purple-600 hover:bg-purple-500 font-semibold">
+                    Submit Request
+                </button>
+            </div>
+            <div id="createMsg" class="mt-3 text-sm hidden"></div>
+        </div>
+
         <div class="mt-6 text-center">
             <a href="index.html" class="text-slate-500 hover:text-slate-300 text-sm flex items-center justify-center gap-2">
                 <i data-feather="arrow-left" class="w-4 h-4"></i> Back to Selection
@@ -55,6 +78,17 @@
         const uid = document.getElementById('uid');
         const pwd = document.getElementById('pwd');
         const errorMsg = document.getElementById('error-msg');
+        const createToggle = document.getElementById('createToggle');
+        const createSection = document.getElementById('createSection');
+        const createId = document.getElementById('createId');
+        const createName = document.getElementById('createName');
+        const createBusNumber = document.getElementById('createBusNumber');
+        const createPhone = document.getElementById('createPhone');
+        const createLicense = document.getElementById('createLicense');
+        const createPassword = document.getElementById('createPassword');
+        const createConfirmPassword = document.getElementById('createConfirmPassword');
+        const createBtn = document.getElementById('createBtn');
+        const createMsg = document.getElementById('createMsg');
 
         // Handle Login
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -88,6 +122,66 @@
                 errorMsg.classList.remove('hidden');
                 btn.disabled = false;
                 btn.innerText = 'Sign In';
+            }
+        });
+
+        createToggle.addEventListener('click', () => {
+            createSection.classList.toggle('hidden');
+            createId.value = uid.value || '';
+            createMsg.classList.add('hidden');
+        });
+
+        createBtn.addEventListener('click', async () => {
+            createMsg.classList.add('hidden');
+            const passwordVal = createPassword.value;
+            const confirmVal = createConfirmPassword.value;
+            if (!createId.value || !createName.value || !createBusNumber.value || !createPhone.value || !passwordVal || !confirmVal) {
+                createMsg.className = 'mt-3 text-sm text-amber-400';
+                createMsg.textContent = 'Please fill required fields.';
+                createMsg.classList.remove('hidden');
+                return;
+            }
+            if (passwordVal.length < 6) {
+                createMsg.className = 'mt-3 text-sm text-amber-400';
+                createMsg.textContent = 'Password must be at least 6 characters.';
+                createMsg.classList.remove('hidden');
+                return;
+            }
+            if (passwordVal !== confirmVal) {
+                createMsg.className = 'mt-3 text-sm text-amber-400';
+                createMsg.textContent = 'Passwords do not match.';
+                createMsg.classList.remove('hidden');
+                return;
+            }
+
+            createBtn.disabled = true;
+            createBtn.innerText = 'Submitting...';
+            try {
+                const result = await apiCallJSON('/requests/driver', {
+                    method: 'POST',
+                    body: {
+                        driver_id: createId.value.trim(),
+                        name: createName.value.trim(),
+                        bus_number: createBusNumber.value.trim(),
+                        phone: createPhone.value.trim(),
+                        license_number: createLicense.value.trim() || null,
+                        password: passwordVal
+                    }
+                });
+                if (result?.error) {
+                    throw new Error(result.error);
+                }
+                createMsg.className = 'mt-3 text-sm text-green-400';
+                createMsg.textContent = 'Request submitted. Admin will approve your account.';
+                createMsg.classList.remove('hidden');
+                createSection.querySelectorAll('input').forEach((el) => { if (el.id !== 'createId') el.value = ''; });
+            } catch (error) {
+                createMsg.className = 'mt-3 text-sm text-red-400';
+                createMsg.textContent = `Request failed: ${error.message}`;
+                createMsg.classList.remove('hidden');
+            } finally {
+                createBtn.disabled = false;
+                createBtn.innerText = 'Submit Request';
             }
         });
 

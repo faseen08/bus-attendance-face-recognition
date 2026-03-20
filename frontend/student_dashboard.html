@@ -212,9 +212,9 @@
             <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
                 <i data-feather="alert-circle" class="w-5 h-5"></i> Leave Management
             </h3>
-            <p class="text-slate-300 mb-4">Toggle your leave status. When marked as "On Leave", you won't be counted as absent.</p>
+            <p class="text-slate-300 mb-4">Request leave approval. Admin will approve or decline your request.</p>
             <button onclick="toggleLeave()" id="leaveBtn" class="bg-amber-600 hover:bg-amber-500 px-6 py-3 rounded-lg font-bold transition w-full md:w-auto">
-                Toggle Leave Status
+                Request Leave Change
             </button>
             <div id="leaveMsg" class="mt-4 hidden p-3 rounded-lg"></div>
         </section>
@@ -603,37 +603,30 @@
             btn.innerText = 'Processing...';
 
             try {
-                const response = await apiCall('/students/toggle_leave', {
+                const desiredStatus = document.getElementById('leaveStatus').innerText === 'On Leave' ? 0 : 1;
+                const response = await apiCall('/requests/leave', {
                     method: 'POST',
-                    body: { student_id: currentStudentId }
+                    body: { desired_status: desiredStatus }
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to toggle leave');
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.error || 'Failed to request leave');
                 }
-
-                const data = await response.json();
-
-                // Update UI
-                updateLeaveDisplay(data.on_leave);
 
                 // Show success message
                 msg.classList.remove('hidden');
-                msg.innerText = data.on_leave === 1 
-                    ? '✅ You are now marked ON LEAVE' 
-                    : '✅ You are now marked ACTIVE';
-                msg.className = data.on_leave === 1 
-                    ? 'mt-4 p-3 rounded-lg bg-amber-600 text-white block text-center'
-                    : 'mt-4 p-3 rounded-lg bg-green-600 text-white block text-center';
+                msg.innerText = '✅ Leave request submitted. Admin will review.';
+                msg.className = 'mt-4 p-3 rounded-lg bg-green-600 text-white block text-center';
 
             } catch (error) {
                 console.error('Error toggling leave:', error);
                 msg.classList.remove('hidden');
-                msg.innerText = '❌ Failed to update leave status. Try again.';
+                msg.innerText = `❌ ${error.message}`;
                 msg.className = 'mt-4 p-3 rounded-lg bg-red-600 text-white block text-center';
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Toggle Leave Status';
+                btn.innerText = 'Request Leave Change';
             }
         }
 

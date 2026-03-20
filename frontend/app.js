@@ -64,6 +64,76 @@ async function loadAttendance() {
   }
 }
 
+async function loadRequests() {
+  const userTable = document.getElementById("userRequestsTable");
+  const leaveTable = document.getElementById("leaveRequestsTable");
+  if (!userTable || !leaveTable) return;
+
+  userTable.innerHTML = "";
+  leaveTable.innerHTML = "";
+
+  try {
+    const requests = await apiCallJSON('/admin/requests?status=PENDING');
+    if (!requests) throw new Error("Failed to load requests");
+
+    const userReqs = requests.filter(r => r.request_type === 'STUDENT_ADD' || r.request_type === 'DRIVER_ADD');
+    const leaveReqs = requests.filter(r => r.request_type === 'LEAVE');
+
+    userReqs.forEach(r => {
+      const payload = JSON.parse(r.payload || "{}");
+      const row = document.createElement("tr");
+      const detail = r.request_type === 'STUDENT_ADD'
+        ? `${payload.name || payload.student_id} | Bus ${payload.bus_number || '-'}`
+        : `${payload.name || payload.driver_id} | Bus ${payload.bus_number || '-'}`;
+      row.innerHTML = `
+        <td class="p-3">${r.request_type === 'STUDENT_ADD' ? 'Student' : 'Driver'}</td>
+        <td class="p-3">${r.requester_id}</td>
+        <td class="p-3 text-slate-300 text-sm">${detail}</td>
+        <td class="p-3">
+          <button class="approve-req bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm mr-2" data-id="${r.id}">Approve</button>
+          <button class="reject-req bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm" data-id="${r.id}">Reject</button>
+        </td>
+      `;
+      userTable.appendChild(row);
+    });
+
+    leaveReqs.forEach(r => {
+      const payload = JSON.parse(r.payload || "{}");
+      const desired = (payload.desired_status ?? 1) === 1 ? "Leave" : "Active";
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td class="p-3">${payload.student_id || r.requester_id}</td>
+        <td class="p-3">${desired}</td>
+        <td class="p-3 text-slate-300 text-sm">${payload.reason || '-'}</td>
+        <td class="p-3">
+          <button class="approve-req bg-green-600 hover:bg-green-500 px-3 py-1 rounded text-sm mr-2" data-id="${r.id}">Approve</button>
+          <button class="reject-req bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm" data-id="${r.id}">Reject</button>
+        </td>
+      `;
+      leaveTable.appendChild(row);
+    });
+
+    document.querySelectorAll(".approve-req").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const id = e.currentTarget.getAttribute("data-id");
+        if (!id) return;
+        await apiCallJSON(`/admin/requests/${id}/approve`, { method: 'POST', body: {} });
+        loadRequests();
+      });
+    });
+    document.querySelectorAll(".reject-req").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const id = e.currentTarget.getAttribute("data-id");
+        if (!id) return;
+        await apiCallJSON(`/admin/requests/${id}/reject`, { method: 'POST', body: {} });
+        loadRequests();
+      });
+    });
+  } catch (err) {
+    console.error("Failed to load requests:", err);
+  }
+}
+
 // Auto load on page open
 // basic loading state
 document.getElementById("presentCount").innerText = "...";
@@ -71,4 +141,4 @@ document.getElementById("totalStudents").innerText = "...";
 document.getElementById("absentCount").innerText = "...";
 
 loadAttendance();
-
+loadRequests();

@@ -82,6 +82,47 @@
     </div>
   </section>
 
+  <!-- Requests Dashboard -->
+  <section class="p-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+        <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+          <h2 class="text-xl font-semibold">User Add Requests</h2>
+          <button onclick="loadRequests()" class="text-sm bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded">Refresh</button>
+        </div>
+        <table class="w-full text-left">
+          <thead class="bg-slate-700 text-slate-300">
+            <tr>
+              <th class="p-3">Type</th>
+              <th class="p-3">ID</th>
+              <th class="p-3">Details</th>
+              <th class="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="userRequestsTable" class="divide-y divide-slate-700"></tbody>
+        </table>
+      </div>
+
+      <div class="bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+        <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+          <h2 class="text-xl font-semibold">Leave Requests</h2>
+          <button onclick="loadRequests()" class="text-sm bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded">Refresh</button>
+        </div>
+        <table class="w-full text-left">
+          <thead class="bg-slate-700 text-slate-300">
+            <tr>
+              <th class="p-3">Student ID</th>
+              <th class="p-3">Requested</th>
+              <th class="p-3">Reason</th>
+              <th class="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leaveRequestsTable" class="divide-y divide-slate-700"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- Load API utility before other scripts -->
   <script>window.APP_ROLE = 'admin';</script>
   <script src="api.js"></script>

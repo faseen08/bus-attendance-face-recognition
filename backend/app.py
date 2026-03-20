@@ -1,6 +1,7 @@
 from datetime import datetime
 import os
 import argparse
+import shutil
 import logging
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -273,6 +274,12 @@ def add_student():
     parent_name = request.form.get("parent_name")
     parent_phone = request.form.get("parent_phone")
     alerts_enabled = request.form.get("alerts_enabled", "1")
+    education_type = (request.form.get("education_type") or "").strip() or None
+    college_type = (request.form.get("college_type") or "").strip() or None
+    college_year = (request.form.get("college_year") or "").strip() or None
+    college_department = (request.form.get("college_department") or "").strip() or None
+    school_class = (request.form.get("school_class") or "").strip() or None
+    school_division = (request.form.get("school_division") or "").strip() or None
     initial_password = (request.form.get("initial_password") or "").strip()
     photo = request.files.get("photo")
 
@@ -301,8 +308,10 @@ def add_student():
             """
             INSERT INTO students (
                 student_id, name, bus_number, bus_stop, photo_path,
-                parent_name, parent_phone, alerts_enabled
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                parent_name, parent_phone, alerts_enabled,
+                education_type, college_type, college_year, college_department,
+                school_class, school_division
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 student_id,
@@ -313,6 +322,12 @@ def add_student():
                 parent_name,
                 parent_phone,
                 1 if str(alerts_enabled) != "0" else 0,
+                education_type,
+                college_type,
+                college_year,
+                college_department,
+                school_class,
+                school_division,
             ),
         )
         conn.commit()
@@ -356,6 +371,35 @@ def add_student():
         conn.close()
 
 
+@app.route("/students/<student_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin")
+def delete_student(student_id):
+    conn = get_connection()
+    try:
+        exists = conn.execute(
+            "SELECT student_id FROM students WHERE student_id = ?", (student_id,)
+        ).fetchone()
+        if not exists:
+            return jsonify({"error": "Student not found"}), 404
+
+        conn.execute("DELETE FROM attendance WHERE student_id = ?", (student_id,))
+        conn.execute("DELETE FROM driver_logs WHERE student_id = ?", (student_id,))
+        conn.execute("DELETE FROM notifications WHERE student_id = ?", (student_id,))
+        conn.execute("DELETE FROM trip_student_state WHERE student_id = ?", (student_id,))
+        conn.execute("DELETE FROM users WHERE student_id = ?", (student_id,))
+        conn.execute("DELETE FROM students WHERE student_id = ?", (student_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    folder = os.path.join(UPLOAD_DIR, student_id)
+    if os.path.isdir(folder):
+        shutil.rmtree(folder, ignore_errors=True)
+
+    return jsonify({"status": "deleted", "student_id": student_id}), 200
+
+
 @app.route("/students/<student_id>/profile", methods=["GET"])
 @require_auth
 def get_student_profile(student_id):
@@ -377,7 +421,8 @@ def get_student_profile(student_id):
         row = conn.execute(
             """
             SELECT student_id, name, bus_number, bus_stop,
-                   parent_name, parent_phone, alerts_enabled, on_leave, photo_path
+                   parent_name, parent_phone, alerts_enabled, on_leave, photo_path,
+                   education_type, college_type, college_year, college_department, school_class, school_division
             FROM students WHERE student_id = ?
             """,
             (student_id,),
@@ -419,6 +464,12 @@ def update_student_profile(student_id):
         parent_name = (data.get("parent_name") or "").strip() or None
         parent_phone = (data.get("parent_phone") or "").strip() or None
         alerts_enabled = data.get("alerts_enabled")
+        education_type = (data.get("education_type") or "").strip() or None
+        college_type = (data.get("college_type") or "").strip() or None
+        college_year = (data.get("college_year") or "").strip() or None
+        college_department = (data.get("college_department") or "").strip() or None
+        school_class = (data.get("school_class") or "").strip() or None
+        school_division = (data.get("school_division") or "").strip() or None
         if alerts_enabled is None:
             alerts_enabled = 1
         alerts_enabled = 1 if str(alerts_enabled) not in ("0", "false", "False") else 0
@@ -436,10 +487,30 @@ def update_student_profile(student_id):
                     bus_number = COALESCE(?, bus_number),
                     parent_name = ?,
                     parent_phone = ?,
-                    alerts_enabled = ?
+                    alerts_enabled = ?,
+                    education_type = COALESCE(?, education_type),
+                    college_type = ?,
+                    college_year = ?,
+                    college_department = ?,
+                    school_class = ?,
+                    school_division = ?
                 WHERE student_id = ?
                 """,
-                (name, bus_stop, bus_number, parent_name, parent_phone, alerts_enabled, student_id),
+                (
+                    name,
+                    bus_stop,
+                    bus_number,
+                    parent_name,
+                    parent_phone,
+                    alerts_enabled,
+                    education_type,
+                    college_type,
+                    college_year,
+                    college_department,
+                    school_class,
+                    school_division,
+                    student_id,
+                ),
             )
         else:
             conn.execute(
@@ -449,10 +520,29 @@ def update_student_profile(student_id):
                     bus_stop = ?,
                     parent_name = ?,
                     parent_phone = ?,
-                    alerts_enabled = ?
+                    alerts_enabled = ?,
+                    education_type = COALESCE(?, education_type),
+                    college_type = ?,
+                    college_year = ?,
+                    college_department = ?,
+                    school_class = ?,
+                    school_division = ?
                 WHERE student_id = ?
                 """,
-                (name, bus_stop, parent_name, parent_phone, alerts_enabled, student_id),
+                (
+                    name,
+                    bus_stop,
+                    parent_name,
+                    parent_phone,
+                    alerts_enabled,
+                    education_type,
+                    college_type,
+                    college_year,
+                    college_department,
+                    school_class,
+                    school_division,
+                    student_id,
+                ),
             )
 
         conn.commit()
@@ -460,7 +550,8 @@ def update_student_profile(student_id):
         updated = conn.execute(
             """
             SELECT student_id, name, bus_number, bus_stop,
-                   parent_name, parent_phone, alerts_enabled, on_leave, photo_path
+                   parent_name, parent_phone, alerts_enabled, on_leave, photo_path,
+                   education_type, college_type, college_year, college_department, school_class, school_division
             FROM students WHERE student_id = ?
             """,
             (student_id,),

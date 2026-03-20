@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS students (
     parent_name TEXT,
     parent_phone TEXT,
     alerts_enabled INTEGER DEFAULT 1,
+    education_type TEXT, -- college | school
+    college_type TEXT, -- engineering | architecture | arts_science
+    college_year TEXT,
+    college_department TEXT,
+    school_class TEXT,
+    school_division TEXT,
     bus_stop_lat REAL,
     bus_stop_lng REAL,
     bus_stop_label TEXT,

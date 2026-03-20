@@ -83,6 +83,63 @@
                     <input id="profileName" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
                 </div>
                 <div>
+                    <label class="block text-sm text-slate-400 mb-1">Education Type</label>
+                    <select id="profileEducationType" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select type</option>
+                        <option value="college">College</option>
+                        <option value="school">School</option>
+                    </select>
+                </div>
+                <div id="profileCollegeFields" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">College Type</label>
+                    <select id="profileCollegeType" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select College Type</option>
+                        <option value="college of engineering">College of Engineering</option>
+                        <option value="college of architecture">College of Architecture</option>
+                        <option value="college of arts and science">College of Arts and Science</option>
+                    </select>
+                </div>
+                <div id="profileCollegeFieldsYear" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">College Year</label>
+                    <select id="profileCollegeYear" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select Year</option>
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                        <option value="5th Year">5th Year</option>
+                    </select>
+                </div>
+                <div id="profileCollegeFieldsDept" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">Department</label>
+                    <input id="profileCollegeDepartment" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div id="profileSchoolFields" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">Class</label>
+                    <select id="profileSchoolClass" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                        <option value="">Select Class</option>
+                        <option value="Pre-Primary">Pre-Primary</option>
+                        <option value="LKG">LKG</option>
+                        <option value="UKG">UKG</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                    </select>
+                </div>
+                <div id="profileSchoolFieldsDiv" class="hidden">
+                    <label class="block text-sm text-slate-400 mb-1">Division</label>
+                    <input id="profileSchoolDivision" type="text" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
                     <label class="block text-sm text-slate-400 mb-1">Bus Number (Read only)</label>
                     <input id="profileBusNumber" type="text" class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-slate-300" readonly>
                 </div>
@@ -315,6 +372,12 @@
             await loadStopLocation();
             await loadLiveBusLocation();
             setInterval(loadLiveBusLocation, 20000);
+
+            const educationSelect = document.getElementById('profileEducationType');
+            if (educationSelect) {
+                educationSelect.addEventListener('change', updateEducationFields);
+            }
+            updateEducationFields();
             
             feather.replace();
         };
@@ -591,12 +654,28 @@
 
         function fillProfileForm(student) {
             document.getElementById('profileName').value = student.name || '';
+            document.getElementById('profileEducationType').value = student.education_type || '';
+            document.getElementById('profileCollegeType').value = student.college_type || '';
+            document.getElementById('profileCollegeYear').value = student.college_year || '';
+            document.getElementById('profileCollegeDepartment').value = student.college_department || '';
+            document.getElementById('profileSchoolClass').value = student.school_class || '';
+            document.getElementById('profileSchoolDivision').value = student.school_division || '';
+            updateEducationFields();
             document.getElementById('profileBusNumber').value = student.bus_number || '';
             document.getElementById('profileBusStop').value = student.bus_stop || '';
             document.getElementById('profileParentName').value = student.parent_name || '';
             document.getElementById('profileParentPhone').value = student.parent_phone || '';
             document.getElementById('profileAlertsEnabled').checked = student.alerts_enabled !== 0;
             setProfilePhotoPreview(student.photo_path);
+        }
+
+        function updateEducationFields() {
+            const value = document.getElementById('profileEducationType').value;
+            document.getElementById('profileCollegeFields').classList.toggle('hidden', value !== 'college');
+            document.getElementById('profileCollegeFieldsYear').classList.toggle('hidden', value !== 'college');
+            document.getElementById('profileCollegeFieldsDept').classList.toggle('hidden', value !== 'college');
+            document.getElementById('profileSchoolFields').classList.toggle('hidden', value !== 'school');
+            document.getElementById('profileSchoolFieldsDiv').classList.toggle('hidden', value !== 'school');
         }
 
         function setProfilePhotoPreview(photoPath, bustCache = false) {
@@ -660,6 +739,12 @@
             try {
                 const payload = {
                     name: document.getElementById('profileName').value.trim() || null,
+                    education_type: document.getElementById('profileEducationType').value || null,
+                    college_type: document.getElementById('profileCollegeType').value || null,
+                    college_year: document.getElementById('profileCollegeYear').value.trim() || null,
+                    college_department: document.getElementById('profileCollegeDepartment').value.trim() || null,
+                    school_class: document.getElementById('profileSchoolClass').value.trim() || null,
+                    school_division: document.getElementById('profileSchoolDivision').value.trim() || null,
                     bus_stop: document.getElementById('profileBusStop').value.trim() || null,
                     parent_name: document.getElementById('profileParentName').value.trim() || null,
                     parent_phone: document.getElementById('profileParentPhone').value.trim() || null,

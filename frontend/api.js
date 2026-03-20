@@ -29,6 +29,10 @@ function _getApiBase() {
   }
   const stored = localStorage.getItem(API_BASE_KEY);
   if (stored) return stored;
+  // If served by Live Server (common dev port 5500), default to local backend on 5000.
+  if (window.location && window.location.hostname === '127.0.0.1' && window.location.port === '5500') {
+    return 'http://127.0.0.1:5000';
+  }
   // If frontend is served by backend under /frontend, use same origin by default.
   if (window.location && window.location.pathname.startsWith('/frontend/')) {
     return window.location.origin;

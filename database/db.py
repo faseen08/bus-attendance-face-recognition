@@ -128,6 +128,24 @@ def init_db():
         _mark_migration_applied(conn, migration)
         report["migrations_applied"].append(migration)
 
+    # Migration 010: student academic fields
+    migration = "010_student_academic_fields"
+    if not _is_migration_applied(conn, migration):
+        _ensure_column(conn, "students", "education_type", "education_type TEXT", report)
+        _ensure_column(conn, "students", "college_year", "college_year TEXT", report)
+        _ensure_column(conn, "students", "college_department", "college_department TEXT", report)
+        _ensure_column(conn, "students", "school_class", "school_class TEXT", report)
+        _ensure_column(conn, "students", "school_division", "school_division TEXT", report)
+        _mark_migration_applied(conn, migration)
+        report["migrations_applied"].append(migration)
+
+    # Migration 011: college type field
+    migration = "011_student_college_type"
+    if not _is_migration_applied(conn, migration):
+        _ensure_column(conn, "students", "college_type", "college_type TEXT", report)
+        _mark_migration_applied(conn, migration)
+        report["migrations_applied"].append(migration)
+
     # Migration 005: trips + locations + notifications tables
     migration = "005_trip_and_alert_tables"
     if not _is_migration_applied(conn, migration):

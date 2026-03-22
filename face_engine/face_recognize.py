@@ -1,4 +1,5 @@
 import os
+import pickle
 from typing import List, Tuple
 
 import numpy as np
@@ -33,6 +34,24 @@ def load_known_faces(
         print("❌ students directory does NOT exist")
         return known_encodings, known_ids
 
+    cache_path = os.path.join(students_dir, "encodings.pkl")
+    use_cache = False
+
+    if os.path.exists(cache_path):
+        cache_mtime = os.path.getmtime(cache_path)
+        # Check if any student folder is newer than the cache file
+        is_stale = False
+        for entry in os.scandir(students_dir):
+            if entry.is_dir() and entry.stat().st_mtime > cache_mtime:
+                is_stale = True
+                print(f"♻️  New data detected in '{entry.name}'. Rebuilding cache...")
+                break
+        
+        if not is_stale:
+            print(f"⚡ Loading cached encodings from {cache_path}")
+            with open(cache_path, "rb") as f:
+                return pickle.load(f)
+
     for student_id in sorted(os.listdir(students_dir)):
         student_path = os.path.join(students_dir, student_id)
         student_encodings = []
@@ -61,6 +80,10 @@ def load_known_faces(
             print("  ✅ Enrolled with", len(student_encodings), "image(s)")
         else:
             print("  ⚠️ No valid single-face images for", student_id)
+
+    # Save to cache for next time
+    with open(cache_path, "wb") as f:
+        pickle.dump((known_encodings, known_ids), f)
 
     print("FINAL → Known faces loaded:", len(known_encodings))
     return known_encodings, known_ids

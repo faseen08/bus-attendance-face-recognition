@@ -13,14 +13,15 @@ class FaceModel:
     Output: list of dicts with "bbox" and L2-normalized "embedding".
     """
 
-    def __init__(self, det_size: Tuple[int, int] = (640, 640)):
+    def __init__(self, det_size: Tuple[int, int] = (640, 640), model_name: str = "buffalo_s"):
+        # Model options: 'buffalo_l' (accurate/slow), 'buffalo_s' (fast/real-time)
         self.det_size = det_size
         self._app = None
 
         import insightface
 
         self._app = insightface.app.FaceAnalysis(
-            name="buffalo_l",
+            name=model_name,
             providers=["CPUExecutionProvider"],
         )
         # InsightFace expects BGR images and handles detection + embedding.

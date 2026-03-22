@@ -1323,8 +1323,59 @@ def driver_get_students_on_bus():
         if not driver_id:
             return jsonify({"error": "User not found"}), 404
 
-        students = get_students_on_bus(driver_id)
-        return jsonify({"driver_id": driver_id, "students_on_bus": students, "count": len(students)}), 200
+        conn = get_connection()
+        
+        # Get driver's bus number
+        driver = conn.execute(
+            "SELECT bus_number FROM drivers WHERE driver_id = ?", (driver_id,)
+        ).fetchone()
+        if not driver:
+            conn.close()
+            return jsonify({"error": "Driver not found"}), 404
+        
+        bus_number = driver[0]
+        
+        # Get all students assigned to this bus
+        all_students = conn.execute(
+            "SELECT student_id, name, bus_stop FROM students WHERE bus_number = ? ORDER BY name",
+            (bus_number,)
+        ).fetchall()
+        
+        # Get students currently on the bus (last action was 'IN')
+        boarded_students = conn.execute("""
+            SELECT DISTINCT s.student_id
+            FROM students s
+            WHERE s.bus_number = ? AND s.student_id IN (
+                SELECT student_id FROM driver_logs
+                WHERE driver_id = ? AND action = 'IN'
+                GROUP BY student_id
+                HAVING MAX(timestamp) = (
+                    SELECT MAX(timestamp) FROM driver_logs
+                    WHERE student_id = driver_logs.student_id AND driver_id = ?
+                )
+            )
+        """, (bus_number, driver_id, driver_id)).fetchall()
+        
+        boarded_ids = {row[0] for row in boarded_students}
+        
+        all_students_list = [{
+            "student_id": row[0],
+            "name": row[1],
+            "bus_stop": row[2],
+            "on_bus": row[0] in boarded_ids
+        } for row in all_students]
+        
+        students_on_bus = [s for s in all_students_list if s["on_bus"]]
+        
+        conn.close()
+        
+        return jsonify({
+            "driver_id": driver_id,
+            "bus_number": bus_number, 
+            "all_students": all_students_list,
+            "students_on_bus": students_on_bus,
+            "count": len(students_on_bus)
+        }), 200
     except Exception as exc:
         logger.exception("Error in driver_get_students_on_bus")
         return jsonify({"error": str(exc)}), 500
@@ -1784,16 +1835,36 @@ def driver_punch_in():
         return jsonify({"error": "Driver not found"}), 404
     conn = get_connection()
     try:
+        # Check if there's an active shift
         active = conn.execute(
             "SELECT id FROM driver_shifts WHERE driver_id = ? AND status = 'ACTIVE'",
             (driver_id,),
         ).fetchone()
         if active:
             return jsonify({"error": "Already punched in"}), 400
-        conn.execute(
-            "INSERT INTO driver_shifts (driver_id, status) VALUES (?, 'ACTIVE')",
-            (driver_id,),
-        )
+        
+        # Check if there's already a punch-in for today with no punch-out
+        today = datetime.utcnow().date().isoformat()
+        today_shift = conn.execute(
+            """SELECT id FROM driver_shifts 
+               WHERE driver_id = ? AND date(punch_in_at) = ? AND status = 'CLOSED' AND punch_out_at IS NULL
+               ORDER BY punch_in_at DESC LIMIT 1""",
+            (driver_id, today),
+        ).fetchone()
+        
+        if today_shift:
+            # Update the existing punch-in for today
+            conn.execute(
+                "UPDATE driver_shifts SET punch_in_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (today_shift["id"],),
+            )
+        else:
+            # Create new shift
+            conn.execute(
+                "INSERT INTO driver_shifts (driver_id, status) VALUES (?, 'ACTIVE')",
+                (driver_id,),
+            )
+        
         conn.commit()
         return jsonify({"status": "punched_in"}), 200
     finally:
@@ -1809,18 +1880,22 @@ def driver_punch_out():
         return jsonify({"error": "Driver not found"}), 404
     conn = get_connection()
     try:
+        # Get the most recent active shift for today
+        today = datetime.utcnow().date().isoformat()
         active = conn.execute(
-            "SELECT id FROM driver_shifts WHERE driver_id = ? AND status = 'ACTIVE' ORDER BY punch_in_at DESC LIMIT 1",
-            (driver_id,),
+            """SELECT id FROM driver_shifts 
+               WHERE driver_id = ? AND date(punch_in_at) = ? AND status = 'ACTIVE'
+               ORDER BY punch_in_at DESC LIMIT 1""",
+            (driver_id, today),
         ).fetchone()
         if not active:
             return jsonify({"error": "No active shift"}), 400
+        
+        # Update the shift to closed and set punch_out
         conn.execute(
-            """
-            UPDATE driver_shifts
-            SET status = 'CLOSED', punch_out_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
+            """UPDATE driver_shifts
+               SET status = 'CLOSED', punch_out_at = CURRENT_TIMESTAMP
+               WHERE id = ?""",
             (active["id"],),
         )
         conn.commit()

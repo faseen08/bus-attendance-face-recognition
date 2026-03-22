@@ -66,69 +66,33 @@
                         <p class="text-slate-400 text-sm font-semibold">Boarded Today</p>
                         <p id="boarded" class="text-3xl font-bold text-green-400 mt-2">0</p>
                     </div>
-                    <i data-feather="arrow-down-circle" class="text-green-500 w-10 h-10 opacity-60"></i>
+                    <i data-feather="check-circle" class="text-green-500 w-10 h-10 opacity-60"></i>
                 </div>
             </div>
 
-            <!-- Alighted Today -->
-            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border-t-4 border-amber-500">
+            <!-- Not Boarded Today -->
+            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border-t-4 border-red-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-slate-400 text-sm font-semibold">Alighted Today</p>
-                        <p id="alighted" class="text-3xl font-bold text-amber-400 mt-2">0</p>
+                        <p class="text-slate-400 text-sm font-semibold">Not Boarded Today</p>
+                        <p id="notBoarded" class="text-3xl font-bold text-red-400 mt-2">0</p>
                     </div>
-                    <i data-feather="arrow-up-circle" class="text-amber-500 w-10 h-10 opacity-60"></i>
+                    <i data-feather="x-circle" class="text-red-500 w-10 h-10 opacity-60"></i>
                 </div>
             </div>
         </div>
 
-        <!-- Quick Actions & Student Search -->
-        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-4">
+        <!-- Shift Punch -->
+        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-3">
             <h2 class="text-xl font-bold flex items-center gap-2">
-                <i data-feather="search" class="w-5 h-5"></i> Quick Student Lookup
+                <i data-feather="clock" class="w-5 h-5"></i> Shift Punch
             </h2>
-            <p class="text-slate-400">Search for a student to log their boarding or alighting</p>
-            <div class="flex gap-4">
-                <input 
-                    type="text" 
-                    id="studentSearch" 
-                    placeholder="Enter Student ID (e.g., ekc23cs001)" 
-                    class="flex-1 px-4 py-2 rounded-lg bg-slate-900 border border-slate-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition text-white"
-                    onkeypress="if(event.key === 'Enter') lookupStudent()">
-                <button 
-                    onclick="lookupStudent()" 
-                    class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg transition font-semibold"
-                >
-                    Search
-                </button>
+            <div class="flex flex-col md:flex-row gap-3">
+                <button onclick="punchIn()" id="punchInBtn" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold">Punch In</button>
+                <button onclick="punchOut()" id="punchOutBtn" class="bg-rose-600 hover:bg-rose-500 px-4 py-2 rounded-lg font-semibold">Punch Out</button>
             </div>
-            <div id="studentStatus" class="hidden p-4 rounded-lg border-l-4">
-                <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <p id="statusStudentId" class="font-bold text-lg">--</p>
-                        <p id="statusStudentName" class="text-slate-300">--</p>
-                        <p id="statusStudentStop" class="text-sm text-slate-400">Bus Stop: --</p>
-                    </div>
-                    <div class="text-center"></div>
-                </div>
-                <div class="flex gap-2">
-                    <button 
-                        id="btnBoarding" 
-                        onclick="logBoarding()" 
-                        class="flex-1 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition font-semibold"
-                    >
-                        ✅ Log Boarding
-                    </button>
-                    <button 
-                        id="btnAlighting" 
-                        onclick="logAlighting()" 
-                        class="flex-1 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg transition font-semibold"
-                    >
-                        ❌ Log Alighting
-                    </button>
-                </div>
-                <p id="actionMessage" class="mt-3 text-sm hidden text-center font-semibold"></p>
-            </div>
+            <div id="shiftInfo" class="text-slate-300 text-sm">No active shift</div>
+            <div id="shiftHistory" class="text-slate-300 text-sm mt-3">No shifts today.</div>
         </section>
 
         <!-- Trip Controls -->
@@ -146,17 +110,29 @@
             <div id="tripInfo" class="text-slate-300 text-sm">No active trip</div>
         </section>
 
-        <!-- Shift Punch -->
-        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-3">
+        <!-- Students on Bus -->
+        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-4">
             <h2 class="text-xl font-bold flex items-center gap-2">
-                <i data-feather="clock" class="w-5 h-5"></i> Shift Punch
+                <i data-feather="users" class="w-5 h-5"></i> Students on This Bus
             </h2>
-            <div class="flex flex-col md:flex-row gap-3">
-                <button onclick="punchIn()" id="punchInBtn" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold">Punch In</button>
-                <button onclick="punchOut()" id="punchOutBtn" class="bg-rose-600 hover:bg-rose-500 px-4 py-2 rounded-lg font-semibold">Punch Out</button>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="border-b border-slate-700">
+                        <tr>
+                            <th class="px-4 py-3 font-semibold text-slate-300">Student ID</th>
+                            <th class="px-4 py-3 font-semibold text-slate-300">Name</th>
+                            <th class="px-4 py-3 font-semibold text-slate-300">Bus Stop</th>
+                            <th class="px-4 py-3 font-semibold text-slate-300">Status</th>
+                            <th class="px-4 py-3 font-semibold text-slate-300">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="busStudentsTable" class="divide-y divide-slate-700">
+                        <tr>
+                            <td colspan="5" class="px-4 py-3 text-slate-400 text-center">Loading students...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-            <div id="shiftInfo" class="text-slate-300 text-sm">No active shift</div>
-            <div id="shiftHistory" class="text-slate-300 text-sm mt-3">No shifts today.</div>
         </section>
 
         <!-- Recent Alerts -->
@@ -210,8 +186,12 @@
 
                 // Update statistics
                 const stats = response.statistics;
-                document.getElementById('boarded').textContent = stats.boarded;
-                document.getElementById('alighted').textContent = stats.alighted;
+                document.getElementById('boarded').textContent = stats.boarded || 0;
+                // Calculate not boarded: total students on bus - boarded
+                const totalBusStudents = stats.total_bus_students || 0;
+                const boarded = stats.boarded || 0;
+                const notBoarded = Math.max(0, totalBusStudents - boarded);
+                document.getElementById('notBoarded').textContent = notBoarded;
 
             } catch (err) {
                 console.error('Dashboard error:', err);
@@ -223,6 +203,7 @@
             await loadRecentAlerts();
             await loadShiftStatus();
             await loadShiftHistory();
+            await loadBusStudents();
         }
 
         async function startTrip(tripType) {
@@ -320,7 +301,9 @@
                 el.innerText = 'No shifts today.';
                 return;
             }
-            el.innerHTML = res.shifts.map(s => {
+            // Show only the 3 most recent shifts
+            const recentShifts = res.shifts.slice(0, 3);
+            el.innerHTML = recentShifts.map(s => {
                 const out = s.punch_out_at ? s.punch_out_at : '—';
                 return `In: ${s.punch_in_at} | Out: ${out}`;
             }).join('<br>');
@@ -379,65 +362,54 @@
             `).join('');
         }
 
-        // ========== STUDENT LOOKUP ==========
-        async function lookupStudent() {
-            const studentId = document.getElementById('studentSearch').value.trim();
-            if (!studentId) {
-                showToast('Please enter a Student ID', 'warning');
-                return;
-            }
-
+        // ========== LOAD BUS STUDENTS ==========
+        async function loadBusStudents() {
+            const table = document.getElementById('busStudentsTable');
             try {
-                const response = await apiCallJSON(`/driver/check-student/${studentId}`, { method: 'GET' });
+                const response = await apiCallJSON('/driver/students-on-bus', { method: 'GET' });
                 
                 if (!response || response.error) {
-                    showToast(response?.error || 'Student not found', 'error');
-                    document.getElementById('studentStatus').classList.add('hidden');
+                    table.innerHTML = '<tr><td colspan="5" class="px-4 py-3 text-slate-400 text-center">No students found for this bus</td></tr>';
                     return;
                 }
 
-                currentStudentId = studentId;
-                const isOnBus = response.on_bus;
-
-                // Show status box
-                document.getElementById('statusStudentId').textContent = response.student_id;
-                document.getElementById('statusStudentName').textContent = response.name;
-                document.getElementById('statusStudentStop').textContent = `Bus Stop: ${response.bus_stop}`;
-                
-                const statusDiv = document.getElementById('studentStatus');
-                if (isOnBus) {
-                    // Status indicator removed
-                    statusDiv.className = 'p-4 rounded-lg border-l-4 border-green-500 bg-green-900/20';
-                    document.getElementById('btnBoarding').disabled = true;
-                    document.getElementById('btnBoarding').className = 'flex-1 bg-slate-600 text-slate-300 px-4 py-2 rounded-lg cursor-not-allowed opacity-50';
-                    document.getElementById('btnAlighting').disabled = false;
-                    document.getElementById('btnAlighting').className = 'flex-1 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg transition font-semibold';
-                } else {
-                    // Status indicator removed
-                    statusDiv.className = 'p-4 rounded-lg border-l-4 border-red-500 bg-red-900/20';
-                    document.getElementById('btnBoarding').disabled = false;
-                    document.getElementById('btnBoarding').className = 'flex-1 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition font-semibold';
-                    document.getElementById('btnAlighting').disabled = true;
-                    document.getElementById('btnAlighting').className = 'flex-1 bg-slate-600 text-slate-300 px-4 py-2 rounded-lg cursor-not-allowed opacity-50';
+                const students = response.all_students || [];
+                if (students.length === 0) {
+                    table.innerHTML = '<tr><td colspan="5" class="px-4 py-3 text-slate-400 text-center">No students assigned to this bus</td></tr>';
+                    return;
                 }
-                
-                document.getElementById('studentStatus').classList.remove('hidden');
-                document.getElementById('actionMessage').classList.add('hidden');
+
+                table.innerHTML = students.map(student => {
+                    const isBoarded = student.on_bus;
+                    const statusBadge = isBoarded 
+                        ? '<span class="px-3 py-1 rounded-full bg-green-900/40 text-green-400 text-xs font-semibold">✓ Boarded</span>'
+                        : '<span class="px-3 py-1 rounded-full bg-red-900/40 text-red-400 text-xs font-semibold">✗ Not Boarded</span>';
+                    const actionBtn = isBoarded
+                        ? `<button onclick="logStudentAlighting('${student.student_id}')" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs font-semibold transition">Log Alighting</button>`
+                        : `<button onclick="logStudentBoarding('${student.student_id}')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-semibold transition">Log Boarding</button>`;
+                    
+                    return `
+                        <tr class="hover:bg-slate-700/50 transition">
+                            <td class="px-4 py-3 font-mono text-blue-400">${student.student_id}</td>
+                            <td class="px-4 py-3">${student.name}</td>
+                            <td class="px-4 py-3 text-slate-300">${student.bus_stop}</td>
+                            <td class="px-4 py-3">${statusBadge}</td>
+                            <td class="px-4 py-3">${actionBtn}</td>
+                        </tr>
+                    `;
+                }).join('');
 
             } catch (err) {
-                console.error('Lookup error:', err);
-                showToast('Error checking student status', 'error');
+                console.error('Error loading bus students:', err);
+                table.innerHTML = '<tr><td colspan="5" class="px-4 py-3 text-red-400 text-center">Error loading students</td></tr>';
             }
         }
 
-        // ========== LOG BOARDING ==========
-        async function logBoarding() {
-            if (!currentStudentId) return;
-
+        async function logStudentBoarding(studentId) {
             try {
                 const response = await apiCallJSON('/driver/log-boarding', {
                     method: 'POST',
-                    body: { student_id: currentStudentId }
+                    body: { student_id: studentId }
                 });
 
                 if (!response || response.error) {
@@ -445,12 +417,9 @@
                     return;
                 }
 
-                showActionMessage('✅ ' + response.message, 'success');
-                setTimeout(() => {
-                    document.getElementById('studentSearch').value = '';
-                    document.getElementById('studentStatus').classList.add('hidden');
-                    loadDashboard();
-                }, 1500);
+                showToast('✅ ' + response.message, 'info');
+                await loadBusStudents();
+                await loadDashboard();
 
             } catch (err) {
                 console.error('Boarding error:', err);
@@ -458,14 +427,11 @@
             }
         }
 
-        // ========== LOG ALIGHTING ==========
-        async function logAlighting() {
-            if (!currentStudentId) return;
-
+        async function logStudentAlighting(studentId) {
             try {
                 const response = await apiCallJSON('/driver/log-alighting', {
                     method: 'POST',
-                    body: { student_id: currentStudentId }
+                    body: { student_id: studentId }
                 });
 
                 if (!response || response.error) {
@@ -473,18 +439,17 @@
                     return;
                 }
 
-                showActionMessage('✅ ' + response.message, 'success');
-                setTimeout(() => {
-                    document.getElementById('studentSearch').value = '';
-                    document.getElementById('studentStatus').classList.add('hidden');
-                    loadDashboard();
-                }, 1500);
+                showToast('✅ ' + response.message, 'info');
+                await loadBusStudents();
+                await loadDashboard();
 
             } catch (err) {
                 console.error('Alighting error:', err);
                 showToast('Error logging alighting', 'error');
             }
         }
+
+
 
         // ========== UI HELPERS ==========
         function showActionMessage(message, type) {

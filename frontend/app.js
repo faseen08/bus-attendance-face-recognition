@@ -93,8 +93,20 @@ async function loadAttendance() {
 }
 
 async function loadDriverPunches() {
-  const dateInput = document.getElementById("driverPunchDate");
-  const selectedDate = dateInput?.value || new Date().toISOString().slice(0, 10);
+  const dateInput = document.getElementById("driverPunchDateInput");
+  let selectedDate = dateInput?.value || "";
+  
+  // Convert DD/MM/YYYY to YYYY-MM-DD if needed
+  if (selectedDate && selectedDate.includes("/")) {
+    const [day, month, year] = selectedDate.split("/");
+    selectedDate = `${year}-${month}-${day}`;
+  }
+  
+  // Default to today if no date selected
+  if (!selectedDate) {
+    selectedDate = new Date().toISOString().slice(0, 10);
+  }
+  
   const table = document.getElementById("driverPunchTable");
   if (!table) return;
 
@@ -307,6 +319,17 @@ document.getElementById("presentCount").innerText = "...";
 document.getElementById("totalStudents").innerText = "...";
 document.getElementById("absentCount").innerText = "...";
 
+// Initialize date inputs with today's date
+const today = new Date().toISOString().slice(0, 10);
+const dateInputElem = document.getElementById("dateInput");
+if (dateInputElem && !dateInputElem.value) {
+  dateInputElem.value = formatDateDisplay(today);
+}
+const driverDateInputElem = document.getElementById("driverPunchDateInput");
+if (driverDateInputElem && !driverDateInputElem.value) {
+  driverDateInputElem.value = formatDateDisplay(today);
+}
+
 loadAttendance();
 loadRequests();
 loadDriverPunches();
@@ -410,6 +433,76 @@ document.addEventListener("click", (e) => {
   if (!datePicker || datePicker.classList.contains("hidden")) return;
   if (datePicker.contains(e.target) || datePickerBtn?.contains(e.target)) return;
   datePicker.classList.add("hidden");
+});
+
+// Driver Punch Date Picker
+const driverDatePickerBtn = document.getElementById("driverDatePickerBtn");
+const driverDateInput = document.getElementById("driverPunchDateInput");
+const driverDatePicker = document.getElementById("driverCustomDatePicker");
+const driverDatePickerGrid = document.getElementById("driverDatePickerGrid");
+const driverDatePickerLabel = document.getElementById("driverDatePickerLabel");
+const driverDatePickerPrev = document.getElementById("driverDatePickerPrev");
+const driverDatePickerNext = document.getElementById("driverDatePickerNext");
+
+let driverPickerMonth = new Date();
+
+function renderDriverDatePicker() {
+  if (!driverDatePickerGrid || !driverDatePickerLabel) return;
+  const year = driverPickerMonth.getFullYear();
+  const month = driverPickerMonth.getMonth();
+  const monthName = driverPickerMonth.toLocaleString(undefined, { month: "long" });
+  driverDatePickerLabel.textContent = `${monthName} ${year}`;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  driverDatePickerGrid.innerHTML = "";
+  for (let i = 0; i < firstDay; i++) {
+    const blank = document.createElement("div");
+    driverDatePickerGrid.appendChild(blank);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "p-1 rounded hover:bg-slate-700 text-slate-200 text-sm";
+    btn.textContent = String(day);
+    btn.addEventListener("click", () => {
+      const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      if (driverDateInput) {
+        driverDateInput.value = formatISOToDisplay(iso);
+      }
+      driverDatePicker?.classList.add("hidden");
+      loadDriverPunches();
+    });
+    driverDatePickerGrid.appendChild(btn);
+  }
+}
+
+if (driverDatePickerBtn && driverDatePicker) {
+  driverDatePickerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    driverDatePicker.classList.toggle("hidden");
+    renderDriverDatePicker();
+  });
+}
+
+driverDatePickerPrev?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  driverPickerMonth = new Date(driverPickerMonth.getFullYear(), driverPickerMonth.getMonth() - 1, 1);
+  renderDriverDatePicker();
+});
+
+driverDatePickerNext?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  driverPickerMonth = new Date(driverPickerMonth.getFullYear(), driverPickerMonth.getMonth() + 1, 1);
+  renderDriverDatePicker();
+});
+
+document.addEventListener("click", (e) => {
+  if (!driverDatePicker || driverDatePicker.classList.contains("hidden")) return;
+  if (driverDatePicker.contains(e.target) || driverDatePickerBtn?.contains(e.target)) return;
+  driverDatePicker.classList.add("hidden");
 });
 
 const toggleBtn = document.getElementById("toggleRequestsBtn");

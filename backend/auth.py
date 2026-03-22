@@ -193,6 +193,7 @@ def require_auth(fn):
 def require_role(role):
     """
     Decorator to require specific role for an endpoint.
+    Must be used after @require_auth decorator.
     
     Usage:
         @app.route('/admin', methods=['GET'])
@@ -203,7 +204,6 @@ def require_role(role):
     """
     def decorator(fn):
         @wraps(fn)
-        @jwt_required()
         def decorated_function(*args, **kwargs):
             from flask_jwt_extended import get_jwt
             claims = get_jwt()

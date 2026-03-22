@@ -182,6 +182,31 @@
             <div id="profileMsg" class="mt-4 hidden p-3 rounded-lg"></div>
         </section>
 
+        <!-- Password Change -->
+        <section id="passwordSection" class="hidden bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
+            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <i data-feather="lock" class="w-5 h-5"></i> Change Password
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Current Password</label>
+                    <input id="currentPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">New Password</label>
+                    <input id="newPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Confirm New Password</label>
+                    <input id="confirmPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
+                </div>
+            </div>
+            <button onclick="changeMyPassword()" id="passwordSaveBtn" class="mt-4 bg-violet-600 hover:bg-violet-500 px-6 py-3 rounded-lg font-bold transition w-full md:w-auto">
+                Update Password
+            </button>
+            <div id="passwordMsg" class="mt-4 hidden p-3 rounded-lg"></div>
+        </section>
+
         <!-- Attendance Records -->
         <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700 mb-6">
             <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
@@ -228,54 +253,6 @@
             </table>
         </section>
 
-        <!-- Parent Alert History -->
-        <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700 mb-6">
-            <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
-                <span>Parent Alert History</span>
-                <button onclick="loadStudentNotifications()" class="bg-slate-600 hover:bg-slate-500 px-3 py-1 rounded text-sm">Refresh</button>
-            </div>
-            <table class="w-full text-left">
-                <thead class="bg-slate-700 border-b border-slate-600">
-                    <tr>
-                        <th class="p-3">Type</th>
-                        <th class="p-3">Trip</th>
-                        <th class="p-3">Status</th>
-                        <th class="p-3">Time</th>
-                    </tr>
-                </thead>
-                <tbody id="notificationsTable" class="divide-y divide-slate-700">
-                    <tr class="hover:bg-slate-700/50">
-                        <td colspan="4" class="p-4 text-center text-slate-400">Loading alerts...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </section>
-
-        <!-- Password Change -->
-        <section id="passwordSection" class="hidden bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
-            <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
-                <i data-feather="lock" class="w-5 h-5"></i> Change Password
-            </h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm text-slate-400 mb-1">Current Password</label>
-                    <input id="currentPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
-                </div>
-                <div>
-                    <label class="block text-sm text-slate-400 mb-1">New Password</label>
-                    <input id="newPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
-                </div>
-                <div>
-                    <label class="block text-sm text-slate-400 mb-1">Confirm New Password</label>
-                    <input id="confirmPassword" type="password" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition">
-                </div>
-            </div>
-            <button onclick="changeMyPassword()" id="passwordSaveBtn" class="mt-4 bg-violet-600 hover:bg-violet-500 px-6 py-3 rounded-lg font-bold transition w-full md:w-auto">
-                Update Password
-            </button>
-            <div id="passwordMsg" class="mt-4 hidden p-3 rounded-lg"></div>
-        </section>
-
         <!-- Leave Control Section -->
         <section class="bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
             <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
@@ -317,6 +294,29 @@
                     </table>
                 </div>
             </div>
+        </section>
+
+        <!-- Parent Alert History -->
+        <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700 mb-6">
+            <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
+                <span>Parent Alert History</span>
+                <button onclick="loadStudentNotifications()" class="bg-slate-600 hover:bg-slate-500 px-3 py-1 rounded text-sm">Refresh</button>
+            </div>
+            <table class="w-full text-left">
+                <thead class="bg-slate-700 border-b border-slate-600">
+                    <tr>
+                        <th class="p-3">Type</th>
+                        <th class="p-3">Trip</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Time</th>
+                    </tr>
+                </thead>
+                <tbody id="notificationsTable" class="divide-y divide-slate-700">
+                    <tr class="hover:bg-slate-700/50">
+                        <td colspan="4" class="p-4 text-center text-slate-400">Loading alerts...</td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
 
         <!-- Bus Stop Location -->

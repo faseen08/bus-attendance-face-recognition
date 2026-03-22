@@ -195,6 +195,27 @@ def init_db():
         _mark_migration_applied(conn, migration)
         report["migrations_applied"].append(migration)
 
+    # Migration 015: notification absent templates
+    migration = "015_notification_absent_templates"
+    if not _is_migration_applied(conn, migration):
+        _ensure_column(
+            conn,
+            "notification_settings",
+            "absent_school_template",
+            "absent_school_template TEXT",
+            report,
+        )
+        _ensure_column(
+            conn,
+            "notification_settings",
+            "absent_home_template",
+            "absent_home_template TEXT",
+            report,
+        )
+        conn.execute("INSERT OR IGNORE INTO notification_settings (id) VALUES (1)")
+        _mark_migration_applied(conn, migration)
+        report["migrations_applied"].append(migration)
+
     # Migration 005: trips + locations + notifications tables
     migration = "005_trip_and_alert_tables"
     if not _is_migration_applied(conn, migration):

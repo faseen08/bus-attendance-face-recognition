@@ -237,11 +237,19 @@ async function apiCallJSON(endpoint, options = {}) {
   
   if (!response) return null;
 
-  // If token is invalid/expired, force logout and redirect to login
+  // If token is invalid/expired, clear tokens and notify user
   if (response.status === 401) {
     clearAllTokens();
-    window.location.href = 'index.html';
-    return null;
+    const alreadyNotified = sessionStorage.getItem("authExpiredNotified");
+    if (!alreadyNotified) {
+      sessionStorage.setItem("authExpiredNotified", "1");
+      if (typeof window.showToast === "function") {
+        window.showToast("Session expired. Please log in again.", "warning");
+      } else {
+        alert("Session expired. Please log in again.");
+      }
+    }
+    return { error: "Session expired. Please log in again." };
   }
   
   const payload = await response.clone().json().catch(() => null);

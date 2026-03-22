@@ -121,6 +121,8 @@ CREATE TABLE IF NOT EXISTS notification_settings (
     timezone TEXT DEFAULT 'Asia/Kolkata',
     boarded_template TEXT DEFAULT 'Bus update: {student_name} boarded bus {bus_number}.',
     missed_template TEXT DEFAULT 'Alert: {student_name} has not boarded bus {bus_number} after the stop was passed.',
+    absent_school_template TEXT DEFAULT 'Alert: {student_name} did not board bus {bus_number} for the to-school trip.',
+    absent_home_template TEXT DEFAULT 'Alert: {student_name} did not board bus {bus_number} for the return trip.',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

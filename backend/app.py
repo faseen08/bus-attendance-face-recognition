@@ -30,7 +30,7 @@ from modules.driver_manager import (
     get_driver_stats,
     get_daily_summary,
 )
-from modules.alerts import send_boarded_alert_for_student, evaluate_not_boarded_alerts
+from modules.alerts import send_boarded_alert_for_student, evaluate_not_boarded_alerts, send_absent_alerts_for_trip
 
 app = Flask(__name__)
 CORS(app)
@@ -1496,9 +1496,38 @@ def end_driver_trip():
         conn.commit()
 
         updated = conn.execute("SELECT * FROM bus_trips WHERE id = ?", (trip["id"],)).fetchone()
+        if trip["trip_type"] == "TO_SCHOOL":
+            send_absent_alerts_for_trip(trip["id"], "ABSENT_TO_SCHOOL", min_minutes_since_start=0)
         return jsonify({"message": "Trip ended", "trip": dict(updated)}), 200
     finally:
         conn.close()
+
+
+@app.route('/driver/alerts/absent', methods=['POST'])
+@require_auth
+@require_role("driver")
+def driver_send_absent_alerts():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "User not found"}), 404
+
+    conn = get_connection()
+    try:
+        trip = conn.execute(
+            "SELECT * FROM bus_trips WHERE driver_id = ? AND status = 'ACTIVE' ORDER BY started_at DESC LIMIT 1",
+            (driver_id,),
+        ).fetchone()
+        if not trip:
+            return jsonify({"error": "No active trip"}), 404
+    finally:
+        conn.close()
+
+    if trip["trip_type"] == "TO_SCHOOL":
+        sent = send_absent_alerts_for_trip(trip["id"], "ABSENT_TO_SCHOOL", min_minutes_since_start=0)
+    else:
+        sent = send_absent_alerts_for_trip(trip["id"], "ABSENT_TO_HOME", min_minutes_since_start=0)
+
+    return jsonify({"status": "ok", "alerts_sent": sent, "count": len(sent)}), 200
 
 
 @app.route('/driver/trips/current', methods=['GET'])
@@ -1588,7 +1617,11 @@ def ingest_driver_location():
     finally:
         conn.close()
 
-    alerts = evaluate_not_boarded_alerts(trip["id"], float(lat), float(lng))
+    alerts = []
+    if os.getenv("ENABLE_GEOFENCE_ALERTS", "0") == "1":
+        alerts = evaluate_not_boarded_alerts(trip["id"], float(lat), float(lng))
+    if trip["trip_type"] == "TO_HOME":
+        send_absent_alerts_for_trip(trip["id"], "ABSENT_TO_HOME", min_minutes_since_start=5)
     return jsonify({"status": "ok", "trip_id": trip["id"], "alerts_triggered": alerts}), 200
 
 
@@ -1649,7 +1682,11 @@ def ingest_gps_device_location():
     finally:
         conn.close()
 
-    alerts = evaluate_not_boarded_alerts(trip["id"], float(lat), float(lng))
+    alerts = []
+    if os.getenv("ENABLE_GEOFENCE_ALERTS", "0") == "1":
+        alerts = evaluate_not_boarded_alerts(trip["id"], float(lat), float(lng))
+    if trip["trip_type"] == "TO_HOME":
+        send_absent_alerts_for_trip(trip["id"], "ABSENT_TO_HOME", min_minutes_since_start=5)
     return jsonify({"status": "ok", "trip_id": trip["id"], "alerts_triggered": alerts}), 200
 
 

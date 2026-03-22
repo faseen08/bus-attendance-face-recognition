@@ -4,7 +4,7 @@ Sends SMS via Twilio when available and always writes audit rows.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from database.db import get_connection
 from modules.bus_location import haversine_meters, evaluate_stop_pass
@@ -231,6 +231,99 @@ def evaluate_not_boarded_alerts(trip_id, lat, lng):
                     "student_id": student_id,
                     "status": send_result["status"],
                     "distance_m": progress["distance_m"],
+                }
+            )
+
+        conn.commit()
+        return sent
+    finally:
+        conn.close()
+
+
+def send_absent_alerts_for_trip(trip_id, event_type, min_minutes_since_start=0):
+    """
+    Send ABSENT alerts based on attendance records for a trip.
+    event_type: ABSENT_TO_SCHOOL | ABSENT_TO_HOME
+    """
+    conn = get_connection()
+    sent = []
+    try:
+        trip = conn.execute(
+            """
+            SELECT id, driver_id, bus_number, trip_type, started_at, ended_at, service_date
+            FROM bus_trips
+            WHERE id = ?
+            """,
+            (trip_id,),
+        ).fetchone()
+        if not trip:
+            return sent
+
+        expected_trip_type = "TO_SCHOOL" if event_type == "ABSENT_TO_SCHOOL" else "TO_HOME"
+        if trip["trip_type"] != expected_trip_type:
+            return sent
+
+        if min_minutes_since_start:
+            try:
+                started_at = datetime.fromisoformat(trip["started_at"])
+                if datetime.utcnow() < started_at + timedelta(minutes=min_minutes_since_start):
+                    return sent
+            except Exception:
+                pass
+
+        students = conn.execute(
+            """
+            SELECT student_id, name, parent_phone, alerts_enabled, on_leave
+            FROM students
+            WHERE bus_number = ?
+            """,
+            (trip["bus_number"],),
+        ).fetchall()
+
+        template_key = "absent_school_template" if expected_trip_type == "TO_SCHOOL" else "absent_home_template"
+        template_default = (
+            "Alert: {student_name} did not board bus {bus_number} for the to-school trip."
+            if expected_trip_type == "TO_SCHOOL"
+            else "Alert: {student_name} did not board bus {bus_number} for the return trip."
+        )
+        template = _get_setting(conn, template_key, template_default)
+
+        for student in students:
+            student_id = student["student_id"]
+            if student["on_leave"] == 1:
+                continue
+            if not student["alerts_enabled"] or not student["parent_phone"]:
+                continue
+            if _already_notified(conn, student_id, trip["id"], event_type):
+                continue
+
+            attended = conn.execute(
+                """
+                SELECT 1 FROM attendance
+                WHERE student_id = ? AND date = ? AND trip_type = ?
+                """,
+                (student_id, trip["service_date"], trip["trip_type"]),
+            ).fetchone()
+            if attended:
+                continue
+
+            text = template.format(
+                student_name=student["name"] or student_id,
+                bus_number=trip["bus_number"],
+            )
+            send_result = _send_sms(student["parent_phone"], text)
+            _save_notification(
+                conn,
+                student_id,
+                trip["id"],
+                trip["trip_type"],
+                event_type,
+                send_result,
+            )
+            sent.append(
+                {
+                    "student_id": student_id,
+                    "status": send_result["status"],
                 }
             )
 

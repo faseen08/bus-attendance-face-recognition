@@ -182,6 +182,75 @@
             <div id="profileMsg" class="mt-4 hidden p-3 rounded-lg"></div>
         </section>
 
+        <!-- Attendance Records -->
+        <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700 mb-6">
+            <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
+                <span>Attendance records</span>
+                <div class="flex items-center gap-2 relative">
+                    <input id="dateFilter" type="text" inputmode="numeric" placeholder="DD/MM/YYYY"
+                           class="bg-slate-600 px-3 py-1 rounded text-sm w-32"
+                           onchange="filterAttendance()">
+                    <button id="studentDatePickerBtn" type="button"
+                            class="bg-slate-600 hover:bg-slate-500 px-2 py-1 rounded text-sm"
+                            aria-label="Pick date">
+                        📅
+                    </button>
+                    <div id="studentDatePicker" class="absolute right-0 top-full mt-2 z-50 hidden">
+                        <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-lg p-3 w-64">
+                            <div class="flex items-center justify-between mb-2">
+                                <button id="studentDatePrev" type="button" class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">‹</button>
+                                <div id="studentDateLabel" class="text-sm font-semibold text-slate-200"></div>
+                                <button id="studentDateNext" type="button" class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">›</button>
+                            </div>
+                            <div class="grid grid-cols-7 gap-1 text-center text-xs text-slate-400 mb-2">
+                                <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+                            </div>
+                            <div id="studentDateGrid" class="grid grid-cols-7 gap-1 text-center"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <table class="w-full text-left">
+                <thead class="bg-slate-700 border-b border-slate-600">
+                    <tr>
+                    <th class="p-3">Date</th>
+                    <th class="p-3">Time</th>
+                    <th class="p-3">Direction</th>
+                    <th class="p-3">Trip</th>
+                    <th class="p-3">Status</th>
+                </tr>
+                </thead>
+                <tbody id="attendanceTable" class="divide-y divide-slate-700">
+                    <tr class="hover:bg-slate-700/50">
+                        <td colspan="4" class="p-4 text-center text-slate-400">Loading attendance records...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Parent Alert History -->
+        <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700 mb-6">
+            <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
+                <span>Parent Alert History</span>
+                <button onclick="loadStudentNotifications()" class="bg-slate-600 hover:bg-slate-500 px-3 py-1 rounded text-sm">Refresh</button>
+            </div>
+            <table class="w-full text-left">
+                <thead class="bg-slate-700 border-b border-slate-600">
+                    <tr>
+                        <th class="p-3">Type</th>
+                        <th class="p-3">Trip</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Time</th>
+                    </tr>
+                </thead>
+                <tbody id="notificationsTable" class="divide-y divide-slate-700">
+                    <tr class="hover:bg-slate-700/50">
+                        <td colspan="4" class="p-4 text-center text-slate-400">Loading alerts...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
         <!-- Password Change -->
         <section id="passwordSection" class="hidden bg-slate-800 rounded-xl p-6 shadow-lg mb-6 border border-slate-700">
             <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
@@ -308,32 +377,6 @@
             <div id="busMap" class="mt-4 h-64 rounded-lg border border-slate-700"></div>
         </section>
 
-        <!-- Recent Attendance Records -->
-        <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700">
-            <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
-                <span>📋 My Recent Attendance Records</span>
-                <select id="dateFilter" onchange="filterAttendance()" class="bg-slate-600 px-3 py-1 rounded text-sm">
-                    <option value="">All Dates</option>
-                </select>
-            </div>
-            <table class="w-full text-left">
-                <thead class="bg-slate-700 border-b border-slate-600">
-                    <tr>
-                    <th class="p-3">Date</th>
-                    <th class="p-3">Time</th>
-                    <th class="p-3">Direction</th>
-                    <th class="p-3">Trip</th>
-                    <th class="p-3">Status</th>
-                </tr>
-                </thead>
-                <tbody id="attendanceTable" class="divide-y divide-slate-700">
-                    <tr class="hover:bg-slate-700/50">
-                        <td colspan="4" class="p-4 text-center text-slate-400">Loading attendance records...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </section>
-
     </main>
 
     <!-- Scripts -->
@@ -386,7 +429,9 @@
             initMaps();
             await loadStudentData();
             await loadStudentAttendance();
+            await loadStudentNotifications();
             await loadLeaveRequests();
+            initStudentDatePicker();
             await loadStopLocation();
             await loadLiveBusLocation();
             setInterval(loadLiveBusLocation, 20000);
@@ -509,17 +554,6 @@
                 // Sort by date descending (newest first)
                 allAttendanceRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-                // Populate date filter dropdown
-                const uniqueDates = [...new Set(allAttendanceRecords.map(r => r.date))];
-                const dateFilter = document.getElementById('dateFilter');
-                
-                uniqueDates.forEach(date => {
-                    const option = document.createElement('option');
-                    option.value = date;
-                    option.textContent = formatDateDisplay(date);
-                    dateFilter.appendChild(option);
-                });
-
                 // Display attendance records
                 displayAttendanceTable(allAttendanceRecords);
 
@@ -583,9 +617,10 @@
          * Filter attendance by selected date
          */
         function filterAttendance() {
-            const selectedDate = document.getElementById('dateFilter').value;
-            
-            if (!selectedDate) {
+            const raw = document.getElementById('dateFilter').value.trim();
+            const selectedDate = parseDisplayDateToISO(raw);
+
+            if (!raw || !selectedDate) {
                 displayAttendanceTable(allAttendanceRecords);
             } else {
                 const filtered = allAttendanceRecords.filter(r => r.date === selectedDate);
@@ -727,6 +762,53 @@
             }
         }
 
+        async function loadStudentNotifications() {
+            const table = document.getElementById('notificationsTable');
+            if (!table) return;
+            table.innerHTML = '';
+            try {
+                const items = await apiCallJSON('/student/notifications');
+                if (!items || items.error || items.length === 0) {
+                    table.innerHTML = `
+                        <tr class="hover:bg-slate-700/50">
+                            <td colspan="4" class="p-4 text-center text-slate-400">No alerts yet.</td>
+                        </tr>
+                    `;
+                    return;
+                }
+                table.innerHTML = items.slice(0, 10).map((item) => {
+                    const tripLabel = item.trip_type === 'TO_SCHOOL'
+                        ? 'To School'
+                        : item.trip_type === 'TO_HOME'
+                            ? 'To Home'
+                            : '--';
+                    return `
+                        <tr class="hover:bg-slate-700/50 border-b border-slate-700">
+                            <td class="p-3">${item.event_type}</td>
+                            <td class="p-3">${tripLabel}</td>
+                            <td class="p-3">${item.status}</td>
+                            <td class="p-3 text-slate-400 text-sm">${item.created_at}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Error loading notifications:', err);
+                table.innerHTML = `
+                    <tr class="hover:bg-slate-700/50">
+                        <td colspan="4" class="p-4 text-center text-red-400">Failed to load alerts.</td>
+                    </tr>
+                `;
+            }
+        }
+
+        function parseDisplayDateToISO(value) {
+            if (!value) return '';
+            const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (!match) return '';
+            const [, day, month, year] = match;
+            return `${year}-${month}-${day}`;
+        }
+
         function formatDateDisplay(value) {
             if (!value) return value;
             if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -734,6 +816,72 @@
                 return `${day}/${month}/${year}`;
             }
             return value;
+        }
+
+        function initStudentDatePicker() {
+            const picker = document.getElementById('studentDatePicker');
+            const grid = document.getElementById('studentDateGrid');
+            const label = document.getElementById('studentDateLabel');
+            const prev = document.getElementById('studentDatePrev');
+            const next = document.getElementById('studentDateNext');
+            const btn = document.getElementById('studentDatePickerBtn');
+            const input = document.getElementById('dateFilter');
+            if (!picker || !grid || !label || !prev || !next || !btn || !input) return;
+
+            let viewMonth = new Date();
+
+            function render() {
+                const year = viewMonth.getFullYear();
+                const month = viewMonth.getMonth();
+                label.textContent = viewMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                grid.innerHTML = '';
+
+                for (let i = 0; i < firstDay; i++) {
+                    const blank = document.createElement('div');
+                    grid.appendChild(blank);
+                }
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const cell = document.createElement('button');
+                    cell.type = 'button';
+                    cell.className = 'p-1 rounded hover:bg-slate-700 text-slate-200 text-sm';
+                    cell.textContent = String(day);
+                    cell.addEventListener('click', () => {
+                        const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        input.value = formatDateDisplay(iso);
+                        picker.classList.add('hidden');
+                        filterAttendance();
+                    });
+                    grid.appendChild(cell);
+                }
+            }
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                picker.classList.toggle('hidden');
+                render();
+            });
+
+            prev.addEventListener('click', (e) => {
+                e.stopPropagation();
+                viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1);
+                render();
+            });
+
+            next.addEventListener('click', (e) => {
+                e.stopPropagation();
+                viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1);
+                render();
+            });
+
+            document.addEventListener('click', (e) => {
+                if (picker.classList.contains('hidden')) return;
+                if (picker.contains(e.target) || btn.contains(e.target)) return;
+                picker.classList.add('hidden');
+            });
         }
 
         function fillProfileForm(student) {

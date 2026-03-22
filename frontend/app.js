@@ -278,10 +278,16 @@ function renderAttendance() {
   } else {
     dateRecords.forEach((record) => {
       const row = document.createElement("tr");
+      const tripLabel = record.trip_type === "TO_SCHOOL"
+        ? "To School"
+        : record.trip_type === "TO_HOME"
+          ? "To Home"
+          : "--";
       row.innerHTML = `
         <td class="p-3">${record.student_id}</td>
         <td class="p-3">${formatDateDisplay(record.date)}</td>
         <td class="p-3">${record.time}</td>
+        <td class="p-3">${tripLabel}</td>
         <td class="p-3 text-green-400 font-semibold">Present</td>
       `;
       table.appendChild(row);

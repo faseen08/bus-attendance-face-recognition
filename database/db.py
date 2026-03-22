@@ -186,6 +186,15 @@ def init_db():
         _mark_migration_applied(conn, migration)
         report["migrations_applied"].append(migration)
 
+    # Migration 014: attendance trip fields
+    migration = "014_attendance_trip_fields"
+    if not _is_migration_applied(conn, migration):
+        _ensure_column(conn, "attendance", "trip_id", "trip_id INTEGER", report)
+        _ensure_column(conn, "attendance", "trip_type", "trip_type TEXT", report)
+        _ensure_column(conn, "attendance", "bus_number", "bus_number TEXT", report)
+        _mark_migration_applied(conn, migration)
+        report["migrations_applied"].append(migration)
+
     # Migration 005: trips + locations + notifications tables
     migration = "005_trip_and_alert_tables"
     if not _is_migration_applied(conn, migration):

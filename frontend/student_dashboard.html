@@ -308,22 +308,6 @@
             <div id="busMap" class="mt-4 h-64 rounded-lg border border-slate-700"></div>
         </section>
 
-        <!-- Attendance Stats -->
-        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-700">
-                <h3 class="text-slate-400 text-sm font-semibold mb-2">Present Days</h3>
-                <p class="text-4xl font-bold text-green-400" id="presentCount">--</p>
-            </div>
-            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-700">
-                <h3 class="text-slate-400 text-sm font-semibold mb-2">Absent Days</h3>
-                <p class="text-4xl font-bold text-red-400" id="absentCount">--</p>
-            </div>
-            <div class="bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-700">
-                <h3 class="text-slate-400 text-sm font-semibold mb-2">Attendance Rate</h3>
-                <p class="text-4xl font-bold text-blue-400" id="attendanceRate">--%</p>
-            </div>
-        </section>
-
         <!-- Recent Attendance Records -->
         <section class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700">
             <div class="p-4 bg-slate-700 font-bold flex justify-between items-center">
@@ -335,11 +319,12 @@
             <table class="w-full text-left">
                 <thead class="bg-slate-700 border-b border-slate-600">
                     <tr>
-                        <th class="p-3">Date</th>
-                        <th class="p-3">Time</th>
-                        <th class="p-3">Direction</th>
-                        <th class="p-3">Status</th>
-                    </tr>
+                    <th class="p-3">Date</th>
+                    <th class="p-3">Time</th>
+                    <th class="p-3">Direction</th>
+                    <th class="p-3">Trip</th>
+                    <th class="p-3">Status</th>
+                </tr>
                 </thead>
                 <tbody id="attendanceTable" class="divide-y divide-slate-700">
                     <tr class="hover:bg-slate-700/50">
@@ -588,6 +573,7 @@
                             ${record.direction === 'IN' ? '🔵 Checkin' : '🔴 Checkout'}
                         </span>
                     </td>
+                    <td class="p-3 text-slate-300">${record.trip_type === 'TO_SCHOOL' ? 'To School' : record.trip_type === 'TO_HOME' ? 'To Home' : '--'}</td>
                     <td class="p-3 text-green-400 font-semibold">✓ Present</td>
                 </tr>
             `).join('');
@@ -611,29 +597,7 @@
          * Calculate attendance statistics
          */
         function calculateStats() {
-            if (allAttendanceRecords.length === 0) {
-                document.getElementById('presentCount').innerText = '0';
-                document.getElementById('absentCount').innerText = '0';
-                document.getElementById('attendanceRate').innerText = '0%';
-                return;
-            }
-
-            // Count unique days (a day is present if student checked in at least once)
-            const uniqueDays = new Set(allAttendanceRecords.map(r => r.date));
-            const presentDays = uniqueDays.size;
-
-            // Estimate total days (today onwards from first record)
-            const records = allAttendanceRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
-            const firstDate = new Date(records[0].date);
-            const lastDate = new Date(records[records.length - 1].date);
-            const totalDays = Math.floor((lastDate - firstDate) / (1000 * 60 * 60 * 24)) + 1;
-            
-            const absentDays = Math.max(0, totalDays - presentDays);
-            const rate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
-
-            document.getElementById('presentCount').innerText = presentDays;
-            document.getElementById('absentCount').innerText = absentDays;
-            document.getElementById('attendanceRate').innerText = rate + '%';
+            // Stats removed from UI; keep this as a no-op for now.
         }
 
         /**

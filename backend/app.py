@@ -649,16 +649,33 @@ def mark_attendance():
 
     conn = get_connection()
     try:
-        exists = conn.execute(
-            "SELECT id FROM students WHERE student_id = ?", (student_id,)
+        student = conn.execute(
+            "SELECT id, bus_number FROM students WHERE student_id = ?", (student_id,)
         ).fetchone()
+        if not student:
+            return jsonify({"error": "unknown student_id"}), 404
+
+        trip = None
+        if student["bus_number"]:
+            trip = conn.execute(
+                """
+                SELECT id, trip_type
+                FROM bus_trips
+                WHERE bus_number = ? AND status = 'ACTIVE'
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (student["bus_number"],),
+            ).fetchone()
     finally:
         conn.close()
 
-    if not exists:
-        return jsonify({"error": "unknown student_id"}), 404
-
-    marked = mark_attendance_db(student_id)
+    marked = mark_attendance_db(
+        student_id,
+        trip_id=trip["id"] if trip else None,
+        trip_type=trip["trip_type"] if trip else None,
+        bus_number=student["bus_number"] if student else None,
+    )
     if marked:
         return jsonify({"status": "Attendance marked"}), 200
     return jsonify({"status": "Already marked today"}), 200
@@ -669,7 +686,7 @@ def get_attendance():
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT student_id, date, time, direction FROM attendance ORDER BY date DESC, time DESC"
+            "SELECT student_id, date, time, direction, trip_type FROM attendance ORDER BY date DESC, time DESC"
         ).fetchall()
     finally:
         conn.close()
@@ -680,6 +697,7 @@ def get_attendance():
             "date": row["date"],
             "time": row["time"],
             "direction": row["direction"] if row["direction"] else "IN",
+            "trip_type": row["trip_type"] if row["trip_type"] else None,
         }
         for row in rows
     ])
@@ -1869,9 +1887,26 @@ def student_notifications():
 def health():
     return jsonify({"status": "ok"})
 
+def _close_active_trips_on_start() -> None:
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            UPDATE bus_trips
+            SET status = 'COMPLETED',
+                ended_at = ?
+            WHERE status = 'ACTIVE'
+            """,
+            (_utc_iso(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
 
 if __name__ == "__main__":
     init_db()
+    _close_active_trips_on_start()
     parser = argparse.ArgumentParser(description="Bus attendance backend")
     parser.add_argument("--host", default=os.environ.get("BACKEND_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("BACKEND_PORT", "5000")))

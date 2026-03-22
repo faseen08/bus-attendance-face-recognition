@@ -37,7 +37,10 @@ CREATE TABLE IF NOT EXISTS attendance (
     student_id TEXT,
     date TEXT,
     time TEXT,
-    direction TEXT DEFAULT 'IN'
+    direction TEXT DEFAULT 'IN',
+    trip_id INTEGER,
+    trip_type TEXT,
+    bus_number TEXT
 );
 
 -- Drivers table

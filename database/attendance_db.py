@@ -1,25 +1,34 @@
 from database.db import get_connection
 from datetime import datetime
 
-def mark_attendance_db(student_id):
+def mark_attendance_db(student_id, trip_id=None, trip_type=None, bus_number=None):
     today = datetime.now().strftime("%Y-%m-%d")
     now = datetime.now().strftime("%H:%M:%S")
 
     conn = get_connection()
 
     # prevent duplicate attendance for same day
-    existing = conn.execute(
-        "SELECT * FROM attendance WHERE student_id=? AND date=?",
-        (student_id, today)
-    ).fetchone()
+    if trip_type:
+        existing = conn.execute(
+            "SELECT * FROM attendance WHERE student_id=? AND date=? AND trip_type=?",
+            (student_id, today, trip_type),
+        ).fetchone()
+    else:
+        existing = conn.execute(
+            "SELECT * FROM attendance WHERE student_id=? AND date=?",
+            (student_id, today),
+        ).fetchone()
 
     if existing:
         conn.close()
         return False  # already marked
 
     conn.execute(
-        "INSERT INTO attendance (student_id, date, time) VALUES (?, ?, ?)",
-        (student_id, today, now)
+        """
+        INSERT INTO attendance (student_id, date, time, trip_id, trip_type, bus_number)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (student_id, today, now, trip_id, trip_type, bus_number),
     )
     conn.commit()
     conn.close()

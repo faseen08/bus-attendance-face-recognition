@@ -168,6 +168,24 @@ def init_db():
         _mark_migration_applied(conn, migration)
         report["migrations_applied"].append(migration)
 
+    # Migration 013: driver shifts
+    migration = "013_driver_shifts"
+    if not _is_migration_applied(conn, migration):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS driver_shifts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                driver_id TEXT NOT NULL,
+                punch_in_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                punch_out_at TIMESTAMP,
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                FOREIGN KEY (driver_id) REFERENCES drivers(driver_id)
+            )
+            """
+        )
+        _mark_migration_applied(conn, migration)
+        report["migrations_applied"].append(migration)
+
     # Migration 005: trips + locations + notifications tables
     migration = "005_trip_and_alert_tables"
     if not _is_migration_applied(conn, migration):

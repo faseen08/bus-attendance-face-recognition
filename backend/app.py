@@ -64,11 +64,15 @@ def _driver_id_from_user(user_id):
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT student_id FROM users WHERE id = ?", (str(user_id),)
+            "SELECT username, role, student_id FROM users WHERE id = ?", (str(user_id),)
         ).fetchone()
-        if not row or not row["student_id"]:
+        if not row:
             return None
-        return row["student_id"]
+        if row["role"] == "driver":
+            return row["username"]
+        if row["role"] == "student":
+            return row["student_id"]
+        return None
     finally:
         conn.close()
 
@@ -372,15 +376,10 @@ def request_driver_add():
         conn.close()
 
 
-@app.route("/requests/leave", methods=["POST"])
+@app.route("/requests/leave", methods=["GET", "POST"])
 @require_auth
 def request_leave():
-    data = request.json or {}
-    desired_status = 1 if str(data.get("desired_status", "1")) not in ("0", "false", "False") else 0
-    reason = (data.get("reason") or "").strip() or None
     user_id = str(get_jwt_identity())
-    claims = get_jwt()
-
     conn = get_connection()
     try:
         user = conn.execute(
@@ -390,6 +389,24 @@ def request_leave():
             return jsonify({"error": "Only students can request leave"}), 403
 
         student_id = user["student_id"]
+
+        if request.method == "GET":
+            rows = conn.execute(
+                """
+                SELECT id, status, payload, created_at, reviewed_at, reviewed_by, reviewed_notes
+                FROM admin_requests
+                WHERE request_type = 'LEAVE' AND requester_id = ?
+                ORDER BY created_at DESC
+                """,
+                (student_id,),
+            ).fetchall()
+            return jsonify([dict(r) for r in rows]), 200
+
+        data = request.json or {}
+        desired_status = 1 if str(data.get("desired_status", "1")) not in ("0", "false", "False") else 0
+        reason = (data.get("reason") or "").strip() or None
+        claims = get_jwt()
+
         pending = conn.execute(
             """
             SELECT 1 FROM admin_requests
@@ -404,6 +421,8 @@ def request_leave():
             "student_id": student_id,
             "desired_status": desired_status,
             "reason": reason,
+            "date": data.get("date"),
+            "date_display": data.get("date_display"),
             "requested_by": claims.get("username"),
         }
         conn.execute(
@@ -467,10 +486,14 @@ def approve_request(request_id):
                 "SELECT 1 FROM students WHERE student_id = ?", (student_id,)
             ).fetchone()
             user_exists = conn.execute(
-                "SELECT 1 FROM users WHERE username = ?", (student_id,)
+                "SELECT id, role, student_id FROM users WHERE username = ?", (student_id,)
             ).fetchone()
-            if exists or user_exists:
+            if exists:
+                logger.warning("Approve student request failed: student exists %s", student_id)
                 return jsonify({"error": "Student already exists"}), 400
+            if user_exists and (user_exists["role"] != "student" or user_exists["student_id"] != student_id):
+                logger.warning("Approve student request failed: username in use %s", student_id)
+                return jsonify({"error": "Username already in use"}), 400
 
             conn.execute(
                 """
@@ -500,14 +523,16 @@ def approve_request(request_id):
                 ),
             )
 
-            user_result = create_user(
-                username=student_id,
-                password=payload.get("password"),
-                role="student",
-                student_id=student_id,
-            )
-            if not user_result.get("success"):
-                return jsonify({"error": user_result.get("error")}), 400
+            if not user_exists:
+                user_result = create_user(
+                    username=student_id,
+                    password=payload.get("password"),
+                    role="student",
+                    student_id=student_id,
+                )
+                if not user_result.get("success"):
+                    logger.warning("Approve student request failed: %s", user_result.get("error"))
+                    return jsonify({"error": user_result.get("error")}), 400
 
         elif req["request_type"] == "DRIVER_ADD":
             driver_id = payload.get("driver_id")
@@ -515,10 +540,14 @@ def approve_request(request_id):
                 "SELECT 1 FROM drivers WHERE driver_id = ?", (driver_id,)
             ).fetchone()
             user_exists = conn.execute(
-                "SELECT 1 FROM users WHERE username = ?", (driver_id,)
+                "SELECT id, role FROM users WHERE username = ?", (driver_id,)
             ).fetchone()
-            if exists or user_exists:
+            if exists:
+                logger.warning("Approve driver request failed: driver exists %s", driver_id)
                 return jsonify({"error": "Driver already exists"}), 400
+            if user_exists and user_exists["role"] != "driver":
+                logger.warning("Approve driver request failed: username in use %s", driver_id)
+                return jsonify({"error": "Username already in use"}), 400
 
             conn.execute(
                 """
@@ -534,14 +563,16 @@ def approve_request(request_id):
                 ),
             )
 
-            user_result = create_user(
-                username=driver_id,
-                password=payload.get("password"),
-                role="driver",
-                student_id=None,
-            )
-            if not user_result.get("success"):
-                return jsonify({"error": user_result.get("error")}), 400
+            if not user_exists:
+                user_result = create_user(
+                    username=driver_id,
+                    password=payload.get("password"),
+                    role="driver",
+                    student_id=None,
+                )
+                if not user_result.get("success"):
+                    logger.warning("Approve driver request failed: %s", user_result.get("error"))
+                    return jsonify({"error": user_result.get("error")}), 400
 
         elif req["request_type"] == "LEAVE":
             student_id = payload.get("student_id")
@@ -1192,15 +1223,9 @@ def bus_location_current():
 @require_role("driver")
 def driver_dashboard():
     try:
-        user_id = int(get_jwt_identity())
-        conn = get_connection()
-        user = conn.execute("SELECT student_id FROM users WHERE id = ?", (user_id,)).fetchone()
-        conn.close()
-
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
-        driver_id = user["student_id"]
+        driver_id = _driver_id_from_user(get_jwt_identity())
+        if not driver_id:
+            return jsonify({"error": "Driver not found"}), 404
         driver_info = get_driver(driver_id)
         if not driver_info:
             return jsonify({"error": "Driver not found"}), 404
@@ -1669,6 +1694,133 @@ def driver_notifications_recent():
             (driver_id,),
         ).fetchall()
         return jsonify([dict(r) for r in rows]), 200
+    finally:
+        conn.close()
+
+
+@app.route('/driver/shift/current', methods=['GET'])
+@require_auth
+@require_role("driver")
+def driver_current_shift():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "Driver not found"}), 404
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT * FROM driver_shifts
+            WHERE driver_id = ? AND status = 'ACTIVE'
+            ORDER BY punch_in_at DESC LIMIT 1
+            """,
+            (driver_id,),
+        ).fetchone()
+        return jsonify({"shift": dict(row) if row else None}), 200
+    finally:
+        conn.close()
+
+
+@app.route('/driver/punch-in', methods=['POST'])
+@require_auth
+@require_role("driver")
+def driver_punch_in():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "Driver not found"}), 404
+    conn = get_connection()
+    try:
+        active = conn.execute(
+            "SELECT id FROM driver_shifts WHERE driver_id = ? AND status = 'ACTIVE'",
+            (driver_id,),
+        ).fetchone()
+        if active:
+            return jsonify({"error": "Already punched in"}), 400
+        conn.execute(
+            "INSERT INTO driver_shifts (driver_id, status) VALUES (?, 'ACTIVE')",
+            (driver_id,),
+        )
+        conn.commit()
+        return jsonify({"status": "punched_in"}), 200
+    finally:
+        conn.close()
+
+
+@app.route('/driver/punch-out', methods=['POST'])
+@require_auth
+@require_role("driver")
+def driver_punch_out():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "Driver not found"}), 404
+    conn = get_connection()
+    try:
+        active = conn.execute(
+            "SELECT id FROM driver_shifts WHERE driver_id = ? AND status = 'ACTIVE' ORDER BY punch_in_at DESC LIMIT 1",
+            (driver_id,),
+        ).fetchone()
+        if not active:
+            return jsonify({"error": "No active shift"}), 400
+        conn.execute(
+            """
+            UPDATE driver_shifts
+            SET status = 'CLOSED', punch_out_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (active["id"],),
+        )
+        conn.commit()
+        return jsonify({"status": "punched_out"}), 200
+    finally:
+        conn.close()
+
+
+@app.route('/driver/shifts/today', methods=['GET'])
+@require_auth
+@require_role("driver")
+def driver_shifts_today():
+    driver_id = _driver_id_from_user(get_jwt_identity())
+    if not driver_id:
+        return jsonify({"error": "Driver not found"}), 404
+    date = request.args.get("date")
+    if not date:
+        date = datetime.utcnow().date().isoformat()
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, driver_id, punch_in_at, punch_out_at, status
+            FROM driver_shifts
+            WHERE driver_id = ? AND date(punch_in_at) = ?
+            ORDER BY punch_in_at DESC
+            """,
+            (driver_id, date),
+        ).fetchall()
+        return jsonify({"date": date, "shifts": [dict(r) for r in rows]}), 200
+    finally:
+        conn.close()
+
+
+@app.route('/admin/driver-shifts', methods=['GET'])
+@require_auth
+@require_role("admin")
+def admin_driver_shifts():
+    date = request.args.get("date")
+    if not date:
+        date = datetime.utcnow().date().isoformat()
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.driver_id, s.punch_in_at, s.punch_out_at, s.status,
+                   d.name AS driver_name, d.bus_number AS bus_number
+            FROM driver_shifts s
+            LEFT JOIN drivers d ON d.driver_id = s.driver_id
+            WHERE date(s.punch_in_at) = ?
+            ORDER BY s.punch_in_at DESC
+            """,
+            (date,),
+        ).fetchall()
+        return jsonify({"date": date, "shifts": [dict(r) for r in rows]}), 200
     finally:
         conn.close()
 

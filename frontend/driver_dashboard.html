@@ -109,10 +109,7 @@
                         <p id="statusStudentName" class="text-slate-300">--</p>
                         <p id="statusStudentStop" class="text-sm text-slate-400">Bus Stop: --</p>
                     </div>
-                    <div class="text-center">
-                        <p class="text-sm text-slate-400 mb-1">Status</p>
-                        <p id="statusIndicator" class="text-lg font-bold">--</p>
-                    </div>
+                    <div class="text-center"></div>
                 </div>
                 <div class="flex gap-2">
                     <button 
@@ -146,6 +143,19 @@
                 <button onclick="sendCurrentLocation()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold">Send Location Now</button>
             </div>
             <div id="tripInfo" class="text-slate-300 text-sm">No active trip</div>
+        </section>
+
+        <!-- Shift Punch -->
+        <section class="bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-700 space-y-3">
+            <h2 class="text-xl font-bold flex items-center gap-2">
+                <i data-feather="clock" class="w-5 h-5"></i> Shift Punch
+            </h2>
+            <div class="flex flex-col md:flex-row gap-3">
+                <button onclick="punchIn()" id="punchInBtn" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-semibold">Punch In</button>
+                <button onclick="punchOut()" id="punchOutBtn" class="bg-rose-600 hover:bg-rose-500 px-4 py-2 rounded-lg font-semibold">Punch Out</button>
+            </div>
+            <div id="shiftInfo" class="text-slate-300 text-sm">No active shift</div>
+            <div id="shiftHistory" class="text-slate-300 text-sm mt-3">No shifts today.</div>
         </section>
 
         <!-- Recent Alerts -->
@@ -210,6 +220,8 @@
 
             await loadCurrentTrip();
             await loadRecentAlerts();
+            await loadShiftStatus();
+            await loadShiftHistory();
         }
 
         async function startTrip(tripType) {
@@ -252,6 +264,55 @@
                 <p><span class="text-slate-400">Last Location:</span> ${res.last_location ? `${Number(res.last_location.lat).toFixed(5)}, ${Number(res.last_location.lng).toFixed(5)} at ${res.last_location.timestamp}` : 'Not sent yet'}</p>
             `;
             startLocationAutoPush();
+        }
+
+        async function loadShiftStatus() {
+            const el = document.getElementById('shiftInfo');
+            const res = await apiCallJSON('/driver/shift/current', { method: 'GET' });
+            if (!res || res.error || !res.shift) {
+                el.innerText = 'No active shift';
+                document.getElementById('punchInBtn').disabled = false;
+                document.getElementById('punchOutBtn').disabled = true;
+                return;
+            }
+            el.innerText = `Punched in at ${res.shift.punch_in_at}`;
+            document.getElementById('punchInBtn').disabled = true;
+            document.getElementById('punchOutBtn').disabled = false;
+        }
+
+        async function punchIn() {
+            const res = await apiCallJSON('/driver/punch-in', { method: 'POST' });
+            if (!res || res.error) {
+                showToast(res?.error || 'Failed to punch in', 'error');
+                return;
+            }
+            showToast('Punched in', 'info');
+            await loadShiftStatus();
+            await loadShiftHistory();
+        }
+
+        async function punchOut() {
+            const res = await apiCallJSON('/driver/punch-out', { method: 'POST' });
+            if (!res || res.error) {
+                showToast(res?.error || 'Failed to punch out', 'error');
+                return;
+            }
+            showToast('Punched out', 'info');
+            await loadShiftStatus();
+            await loadShiftHistory();
+        }
+
+        async function loadShiftHistory() {
+            const el = document.getElementById('shiftHistory');
+            const res = await apiCallJSON('/driver/shifts/today', { method: 'GET' });
+            if (!res || res.error || !res.shifts || res.shifts.length === 0) {
+                el.innerText = 'No shifts today.';
+                return;
+            }
+            el.innerHTML = res.shifts.map(s => {
+                const out = s.punch_out_at ? s.punch_out_at : '—';
+                return `In: ${s.punch_in_at} | Out: ${out}`;
+            }).join('<br>');
         }
 
         function startLocationAutoPush() {
@@ -334,16 +395,14 @@
                 
                 const statusDiv = document.getElementById('studentStatus');
                 if (isOnBus) {
-                    document.getElementById('statusIndicator').textContent = '✅ ON BUS';
-                    document.getElementById('statusIndicator').className = 'text-lg font-bold text-green-400';
+                    // Status indicator removed
                     statusDiv.className = 'p-4 rounded-lg border-l-4 border-green-500 bg-green-900/20';
                     document.getElementById('btnBoarding').disabled = true;
                     document.getElementById('btnBoarding').className = 'flex-1 bg-slate-600 text-slate-300 px-4 py-2 rounded-lg cursor-not-allowed opacity-50';
                     document.getElementById('btnAlighting').disabled = false;
                     document.getElementById('btnAlighting').className = 'flex-1 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg transition font-semibold';
                 } else {
-                    document.getElementById('statusIndicator').textContent = '❌ NOT ON BUS';
-                    document.getElementById('statusIndicator').className = 'text-lg font-bold text-red-400';
+                    // Status indicator removed
                     statusDiv.className = 'p-4 rounded-lg border-l-4 border-red-500 bg-red-900/20';
                     document.getElementById('btnBoarding').disabled = false;
                     document.getElementById('btnBoarding').className = 'flex-1 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition font-semibold';

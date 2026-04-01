@@ -670,15 +670,16 @@ def mark_attendance():
     finally:
         conn.close()
 
+    effective_trip_type = trip["trip_type"] if trip else "TO_HOME"
     marked = mark_attendance_db(
         student_id,
         trip_id=trip["id"] if trip else None,
-        trip_type=trip["trip_type"] if trip else None,
+        trip_type=effective_trip_type,
         bus_number=student["bus_number"] if student else None,
     )
     if marked:
-        return jsonify({"status": "Attendance marked"}), 200
-    return jsonify({"status": "Already marked today"}), 200
+        return jsonify({"status": "Attendance marked", "trip_type": effective_trip_type}), 200
+    return jsonify({"status": "Already marked today", "trip_type": effective_trip_type}), 200
 
 
 @app.route("/attendance", methods=["GET"])
